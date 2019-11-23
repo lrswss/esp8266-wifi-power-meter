@@ -1,5 +1,5 @@
 /*
- * ESP8266 Wifi Power Meter (Ferraris Counter)
+ * ESP8266 Wifi Power Meter (Ferraris Counter) v1.1
  * 
  * Hardware: Wemos D1 mini board + TCRT5000 IR sensor
 .* https://github.com/lrswss/esp8266-wifi-power-meter/ 
@@ -49,6 +49,8 @@
 #define MQTT_HOST_IP    "<MQTT_SERVER_IP"
 #define MQTT_CLIENT_ID  "PowerMeter_%x"
 #define MQTT_TOPIC_CNT  "powermeter/counter"
+#define MQTT_TOPIC_CONS "powermeter/consumption"
+#define MQTT_TOPIC_RUNT "powermeter/runtime"
 #define MQTT_TOPIC_RSSI "powermeter/rssi"
 
 // Uncomment INFLUXDB_HOST for debugging purposes:
@@ -60,7 +62,7 @@
 
 
 #define SKETCH_NAME "WifiPowerMeter"
-#define SKETCH_VERSION "1.0"
+#define SKETCH_VERSION "1.1"
 
 #define READINGS_TOTAL_SEC 90
 #define READINGS_INTERVAL_MS 100
@@ -87,6 +89,7 @@ ESP8266HTTPUpdateServer httpUpdater;
 // counter values are frequently stored 
 // in rotating pseudo EEPROM of ESP8622 chip
 uint32_t counterTotal = 0;
+uint32_t counterOffset = 0; // can be set manually
 uint16_t impulseThreshold = 0;
 EEPROM_Rotate EEP;
 
@@ -118,7 +121,7 @@ void handleRoot() {
 // Messwerte per AJAX ausliefern
 void handleGetReadings() { 
   char reply[128];
-  char s[9];
+  char s[8];
 
   if (!impulseThreshold && !readThreshold) {  
 #ifdef LANGUAGE_EN
@@ -130,7 +133,11 @@ void handleGetReadings() {
   
   memset(reply, 0, sizeof(reply));
   strcpy(reply, itoa(counterTotal, s, 10)); strcat(reply, ",");
-  dtostrf(counterTotal/(TURNS_PER_KWH*1.0), 8, 2, s);
+  if (counterOffset > 0) {
+    dtostrf((counterTotal/(TURNS_PER_KWH*1.0)+counterOffset/10.0), 7, 1, s);
+  } else {
+    dtostrf(counterTotal/(TURNS_PER_KWH*1.0), 7, 1, s);
+  }
   strcat(reply, s); strcat(reply, ",");
   strcat(reply, itoa(impulseThreshold, s, 10)); strcat(reply, ",");
   strcat(reply, getRuntime()); strcat(reply, ",");
@@ -187,6 +194,7 @@ void handleSaveThreshold() {
 // will reset resolutions counter to zero
 void handleResetCounter() {
   counterTotal = 0;
+  counterOffset = 0;
 #ifdef LANGUAGE_EN
   setMessage("Counter reset successful!", 3);
 #else
@@ -204,6 +212,32 @@ void handleGetMessage() {
   } else {
     expireMessage--;
   }
+}
+
+
+// manually set a counterOffset to adjust the reading for total consumption
+// on the embedded web page by sending a request with the current power
+// meter reading, e.g. http://<ip>/setCounter?set=18231.1
+void handleSetCounter() {
+  uint32_t counterKWh;
+
+  if (!httpServer.hasArg("value")) {
+#ifdef LANGUAGE_EN
+    setMessage("Failed to set counter offset!", 3);
+#else
+    setMessage("Zählerstandsanpassung fehlgeschlagen!", 3);
+#endif
+  } else {
+    counterKWh = int(httpServer.arg("set").toFloat()*10);
+    counterOffset = counterKWh - lround(counterTotal*10/TURNS_PER_KWH);
+#ifdef LANGUAGE_EN
+    setMessage("Counter offset set successfully!", 3);
+#else
+    setMessage("Zählerstandsanpassung gespeichert!", 3);
+#endif
+  }
+  httpServer.sendHeader("Location", String("/"), true);
+  httpServer.send(302, "text/plain", "");
 }
 
 
@@ -231,8 +265,28 @@ char* getRuntime() {
 }
 
 
-// connect to local wifi network (dhcp)
+// return as new allocated string without blanks
+char* removeBlanks(const char* src) {
+  uint8_t i = 0, j = 0;
+  char *dest;
+
+  if ((dest = (char *)malloc(strlen(src)+1)) != NULL) {
+    while (src[i] != '\0') {
+      if (src[i] != ' ')
+        dest[j++] = src[i];
+      i++;
+    }
+    dest[j] = '\0';
+  }
+  return dest;
+}
+
+
+// connect to local wifi network (dhcp) with a 10 second timeout
+// after five consecutive connection failure restart ESP
 void connectWifi() {
+  static uint8_t wifi_error = 0;
+  uint8_t wifi_timeout = 20; // 10 seconds timeout
   char rssi[16];
   
   WiFi.mode(WIFI_STA);
@@ -240,16 +294,28 @@ void connectWifi() {
   Serial.print(WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED && wifi_timeout > 0) {
     Serial.print(F("."));
     delay(500);
+    wifi_timeout--;
   }
-  
-  Serial.println(F("OK."));
-  Serial.print(F("IP address: "));
-  Serial.println(WiFi.localIP());
-  sprintf(rssi, "RSSI: %ld dBm", WiFi.RSSI());
-  Serial.println(rssi);
+  if (wifi_timeout > 0) {
+    wifi_error = 0;
+    Serial.println(F("OK."));
+    Serial.print(F("IP address: "));
+    Serial.println(WiFi.localIP());
+    sprintf(rssi, "RSSI: %ld dBm", WiFi.RSSI());
+    Serial.println(rssi);
+  } else {
+      Serial.println(F("FAILED!"));
+      wifi_error++;
+  }
+  if (wifi_error >= 5) {
+      saveSettingsEEPROM();
+      delay(100);
+      Serial.println(F("Continuous Wifi connection errors...rebooting!"));
+      ESP.restart();
+  }
 }
 
 
@@ -259,9 +325,9 @@ void publishData() {
   static char clientid[32];
   uint8_t mqtt_error = 0;
 
-  // abort if Wifi is not available
+  // restart wifi connection if down
   if (WiFi.status() != WL_CONNECTED)
-    return;
+    connectWifi();
 
   while (!mqtt.connected() && mqtt_error < 3) {
     snprintf(clientid, sizeof(clientid), MQTT_CLIENT_ID, random(0xffff));
@@ -279,6 +345,23 @@ void publishData() {
       Serial.print(F(" "));
       Serial.println(counterTotal);
       mqtt.publish(MQTT_TOPIC_CNT, String(counterTotal).c_str(), true);
+      delay(50);
+
+      // publish total consumption if counter offset values is set
+      if (counterOffset > 0) {
+        Serial.print(F("Publishing "));
+        Serial.print(MQTT_TOPIC_CONS);
+        Serial.print(F(" "));
+        Serial.println(counterTotal/(TURNS_PER_KWH*1.0)+counterOffset/10.0);
+        mqtt.publish(MQTT_TOPIC_CONS, String(counterTotal/(TURNS_PER_KWH*1.0)+counterOffset/10.0).c_str(), true);
+        delay(50);
+      }
+
+      Serial.print(F("Publishing "));
+      Serial.print(MQTT_TOPIC_RUNT);
+      Serial.print(F(" "));
+      Serial.println(removeBlanks(getRuntime()));
+      mqtt.publish(MQTT_TOPIC_RUNT, removeBlanks(getRuntime()), true);
       delay(50);
 
       Serial.print(F("Publishing "));
@@ -308,12 +391,13 @@ void publishData() {
 
 // get last reading from pseudo eeprom
 void readSettingsEEPROM() {
-  
+  byte b1, b2, b3, b4;
+
   // counter uint32_t (4 bytes)
-  byte b4 = EEP.read(EEPROM_ADDR);
-  byte b3 = EEP.read(EEPROM_ADDR + 1);
-  byte b2 = EEP.read(EEPROM_ADDR + 2);
-  byte b1 = EEP.read(EEPROM_ADDR + 3);
+  b4 = EEP.read(EEPROM_ADDR);
+  b3 = EEP.read(EEPROM_ADDR + 1);
+  b2 = EEP.read(EEPROM_ADDR + 2);
+  b1 = EEP.read(EEPROM_ADDR + 3);
   counterTotal = b1; counterTotal <<= 8;
   counterTotal |= b2; counterTotal <<= 8;
   counterTotal |= b3; counterTotal <<= 8;
@@ -323,18 +407,29 @@ void readSettingsEEPROM() {
   b2 = EEP.read(EEPROM_ADDR + 4);
   b1 = EEP.read(EEPROM_ADDR + 5);
   impulseThreshold = b1; impulseThreshold <<= 8;
-  impulseThreshold |= b2;  
+  impulseThreshold |= b2;
+
+  // optional counterOffset uint32_t (4 bytes)
+  b4 = EEP.read(EEPROM_ADDR + 6);
+  b3 = EEP.read(EEPROM_ADDR + 7);
+  b2 = EEP.read(EEPROM_ADDR + 8);
+  b1 = EEP.read(EEPROM_ADDR + 9);
+  counterOffset = b1; counterOffset <<= 8;
+  counterOffset |= b2; counterOffset <<= 8;
+  counterOffset |= b3; counterOffset <<= 8;
+  counterOffset |= b4;
 }
 
 
 // save current reading to pseudo eeprom
 void saveSettingsEEPROM() {
+    byte b1, b2, b3, b4;
 
     uint32_t _counter = counterTotal;
-    byte b4 = _counter; _counter >>= 8;
-    byte b3 = _counter; _counter >>= 8;
-    byte b2 = _counter; _counter >>= 8;
-    byte b1 = _counter;
+    b4 = _counter; _counter >>= 8;
+    b3 = _counter; _counter >>= 8;
+    b2 = _counter; _counter >>= 8;
+    b1 = _counter;
     EEP.write(EEPROM_ADDR, b4);
     EEP.write(EEPROM_ADDR + 1, b3);
     EEP.write(EEPROM_ADDR + 2, b2);
@@ -345,6 +440,16 @@ void saveSettingsEEPROM() {
     b1 = _impulseThreshold;
     EEP.write(EEPROM_ADDR + 4, b2);
     EEP.write(EEPROM_ADDR + 5, b1);
+
+    _counter = counterOffset;
+    b4 = _counter; _counter >>= 8;
+    b3 = _counter; _counter >>= 8;
+    b2 = _counter; _counter >>= 8;
+    b1 = _counter;
+    EEP.write(EEPROM_ADDR + 6, b4);
+    EEP.write(EEPROM_ADDR + 7, b3);
+    EEP.write(EEPROM_ADDR + 8, b2);
+    EEP.write(EEPROM_ADDR + 9, b1);
     
     EEP.commit();
 }
@@ -494,24 +599,32 @@ void setup() {
 
   EEP.begin(4096);
   readSettingsEEPROM();
-  if (counterTotal >= UINT32_MAX-1) {
+  if (counterTotal >= UINT32_MAX-1 || counterOffset >= UINT32_MAX-1 || impulseThreshold >= UINT16_MAX-1) {
 #ifdef LANGUAGE_EN
     Serial.println(F("Resetting invalid values in EEPROM..."));
 #else    
     Serial.println(F("Ungültige Werte im EEPROM zurückgesetzt..."));
-#endif    
-    counterTotal = 0;
-    impulseThreshold = 0;
+#endif
+    if (counterTotal >= UINT32_MAX-1)
+      counterTotal = 0;
+    if (counterOffset >= UINT32_MAX-1)
+      counterOffset = 0;
+    if (impulseThreshold >= UINT16_MAX-1)
+      impulseThreshold = 0;
     saveSettingsEEPROM();
   } else {
 #ifdef LANGUAGE_EN
     Serial.print(F("Counter reading from EEPROM: "));
     Serial.println(counterTotal);
+    Serial.print(F("Counter offset stored in EEPROM: "));
+    Serial.println(counterOffset/10.0);
     Serial.print(F("Threshold value read from EEPROM: "));
     Serial.println(impulseThreshold);
 #else   
     Serial.print(F("Zählerstand im EEPROM: "));
     Serial.println(counterTotal);
+    Serial.print(F("Zählerstandsanpassung im EEPROM: "));
+    Serial.println(counterOffset/10.0);
     Serial.print(F("Schwellwert im EEPROM: "));
     Serial.println(impulseThreshold);
 #endif    
@@ -534,6 +647,7 @@ void setup() {
   httpServer.on("/readings", handleGetReadings);
   httpServer.on("/restart", handleRestartSystem);
   httpServer.on("/message", handleGetMessage);
+  httpServer.on("/setCounter", handleSetCounter);
 }
 
 

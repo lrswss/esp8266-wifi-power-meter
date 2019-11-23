@@ -138,7 +138,7 @@ function getReadings() {
 <div id="readings" style="margin-top:5px">
 <table style="min-width:340px">
 	<tr><th>Anzahl Umdrehungen:</th><td><span id="TotalRevolutions">--</span></td></tr>
-	<tr><th>Stromverbrauch:</th><td><span id="TotalConsumption">--</span> kWh</td></tr>
+	<tr><th>Gesamtverbrauch:</th><td><span id="TotalConsumption">--</span> kWh</td></tr>
 	<tr id="tr2"><th>Messwerte gelesen:</th><td><span id="CurrentReadings">--</span>/<span id="TotalReadings">--</span></td></tr>
 	<tr id="tr3"><th>Impulsschwellwert:</th><td><span id="Threshold">--</span></td></tr>
     <tr id="tr4"><th>Min./Max. Impulswert:</th><td><span id="Min">--</span>/<span id="Max">--</span></td></tr>

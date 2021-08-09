@@ -1,5 +1,5 @@
 /*
-   ESP8266 Wifi Power Meter (Ferraris Counter) v1.2
+   ESP8266 Wifi Power Meter (Ferraris Counter) v1.2.1
 
    Hardware: Wemos D1 mini board + TCRT5000 IR sensor
    https://github.com/lrswss/esp8266-wifi-power-meter/
@@ -35,8 +35,8 @@
 #include <ArduinoJson.h>
 #include <EEPROM_Rotate.h>
 
-// This value has to be setup according to the
-// specs of your ferraris power meter
+// this value has to be set according
+// to the specs of your ferraris meter
 #define TURNS_PER_KWH 75
 
 // uncomment for german ui, defaults to english
@@ -57,7 +57,8 @@
 #define MQTT_SUBTOPIC_RSSI  "rssi"
 #define MQTT_SUBTOPIC_HEAP  "freeheap"
 
-// uncomment to publish data as JSON on a single topic
+// if defined the data is published as JSON on MQTT_BASE_TOPIC
+// comment out to post each value on an individual topic
 #define MQTT_PUBLISH_JSON
 
 // Uncomment INFLUXDB_ENABLE for debugging purposes:
@@ -69,14 +70,14 @@
 #define INFLUXDB_DEVICE_TAG "TCRT5000"
 
 #define SKETCH_NAME "WifiPowerMeter"
-#define SKETCH_VERSION "1.2"
+#define SKETCH_VERSION "1.2.1"
 
 // the following settings should not be changed
 #define READINGS_TOTAL_SEC 90
 #define READINGS_INTERVAL_MS 100
 #define READINGS_SPREAD_MIN 4
 #define ABOVE_THRESHOLD_TRIGGER 3
-#define IMPULSE_DEBOUNCE_SEC 5
+#define IMPULSE_DEBOUNCE_SEC 3
 #define BACKUP_CYCLE_MIN 60
 #define EEPROM_ADDR 10
 //#define DEBUG_HEAP
@@ -97,11 +98,11 @@ PubSubClient mqtt(espClient);
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
 
-// counter values are frequently stored
-// in rotating pseudo EEPROM of ESP8266 chip
+// counter values are frequently stored in a
+// rotating pseudo EEPROM (actually ESP8266 flash)
 struct eeprom {
   uint32_t counterTotal = 0;
-  uint32_t counterOffset = 0; // has to be set manually
+  uint32_t counterOffset = 0; // has to be set manually (see README)
   uint16_t impulseThreshold = 0;
 } settings;
 EEPROM_Rotate EEP;
@@ -131,7 +132,7 @@ void handleRoot() {
 }
 
 
-// updates web ui with JSON with AJAX once a second
+// passes updated value to web ui as JSON on AJAX call once a second
 // can also be used for (remote) RESTful request
 void handleGetReadings() {
   StaticJsonDocument<384> JSON;
@@ -147,13 +148,14 @@ void handleGetReadings() {
   }
 
   memset(reply, 0, sizeof(reply));
+  JSON.clear();
   JSON["totalCounter"] = settings.counterTotal;
   totalConsumption = settings.counterTotal / (TURNS_PER_KWH * 1.0);
   if (settings.counterOffset > 0) {
     totalConsumption += settings.counterOffset / 10.0;
   }
   JSON["totalConsumption"] = int(totalConsumption * 100) / 100.0;
-  JSON["runtime"] = getRuntime();
+  JSON["runtime"] = getRuntime(false);
 
   // only relevant for power meter's web ui
   if (httpServer.arg("local").length() >= 1) {
@@ -205,7 +207,7 @@ void handleRestartSystem() {
 }
 
 
-// initate calculation of new threshold value
+// trigger calculation of new threshold value
 void handleCalcThreshold() {
   resetThreshold = true;
   readThreshold = true;
@@ -214,7 +216,7 @@ void handleCalcThreshold() {
 }
 
 
-// save new threshold
+// save new impulse threshold value
 void handleSaveThreshold() {
   saveSettingsEEPROM();
   savedThreshold = true;
@@ -228,7 +230,7 @@ void handleSaveThreshold() {
 }
 
 
-// will reset resolutions counter to zero
+// will reset the revolution counter to zero
 void handleResetCounter() {
   saveSettingsEEPROM();
   settings.counterTotal = 0;
@@ -243,7 +245,7 @@ void handleResetCounter() {
 
 
 // manually set a counterOffset to adjust the reading for total consumption
-// on the embedded web page by sending a request with the current power
+// on the embedded web page by sending a request with the current electricity
 // meter reading, e.g. http://<ip>/setCounter?value=18231.1
 void handleSetCounter() {
   uint32_t counterKWh;
@@ -271,7 +273,7 @@ void handleSetCounter() {
 }
 
 
-// manually adjust impulse threshold value
+// manually adjust the impulse threshold value
 // http://<ip>/setThreshold?value=60
 void handleSetThreshold() {
 
@@ -294,6 +296,7 @@ void handleSetThreshold() {
   httpServer.sendHeader("Location", "/", true);
   httpServer.send(302, "text/plain", "");
 }
+
 
 // required for RESTful api
 void setCrossOrigin() {
@@ -320,41 +323,43 @@ void setMessage(const char *msg, int expireSeconds) {
 }
 
 
-// returns total runtime (day/hours/minuntes) as a string
-// has interal time keeping to cope with millis() rollover after 49 days
+// rollover safe comparison for given timestamp with millis()
+int32_t tsDiff(uint32_t tsMillis) {
+  int32_t diff = millis() - tsMillis;
+  if (diff < 0)
+    return abs(diff);
+  else
+    return diff;
+}
+
+
+// returns total runtime (day/hours/minutes) as a string
+// has internal time keeping to cope with millis() rollover after 49 days
 // should be called from time to time to update interal counter
-char* getRuntime() {
+char* getRuntime(bool noSpaces) {
   static uint32_t lastMillis = 0;
   static uint32_t seconds = 0;
   static char runtime[16];
 
-  seconds += abs(millis() - lastMillis) / 1000;
+  seconds += tsDiff(lastMillis) / 1000;
   lastMillis = millis();
 
   uint16_t days = seconds / 86400 ;
   uint8_t hours = (seconds % 86400) / 3600;
   uint8_t minutes = ((seconds % 86400) % 3600) / 60;
   memset(runtime, 0, sizeof(runtime));
-  sprintf(runtime, "%dd %dh %dm", days, hours, minutes);
+  if (noSpaces) {
+    sprintf(runtime, "%dd%dh%dm", days, hours, minutes);
+  } else {
+    sprintf(runtime, "%dd %dh %dm", days, hours, minutes);
+  }
 
   return runtime;
 }
 
 
-// returns given string without spaces
-char* removeBlanks(char *str) {
-  uint8_t i = 0, j = 0;
-  while (str[i++]) {
-    if (str[i - 1] != ' ')
-      str[j++] = str[i - 1];
-  }
-  str[j] = '\0';
-  return str;
-}
-
-
 // connect to local wifi network (dhcp) with a 10 second timeout
-// after five consecutive connection failure restart ESP
+// after five consecutive connection failures restart ESP
 void connectWifi() {
   static uint8_t wifi_error = 0;
   uint8_t wifi_timeout = 10;
@@ -396,6 +401,18 @@ void connectWifi() {
     ESP.restart();
   }
   Serial.println();
+}
+
+
+// returns hardware system id (last 3 bytes of mac address)
+// used for MQTT topic
+String systemID() {
+  uint8_t mac[6];
+  char sysid[7];
+
+  WiFi.macAddress(mac);
+  sprintf(sysid, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+  return String(sysid);
 }
 
 
@@ -452,7 +469,7 @@ bool mqttConnect() {
 }
 
 
-// publish all data on single topics
+// publish data on multiple topics
 #ifndef MQTT_PUBLISH_JSON
 void publishDataSingle() {
   static char topicStr[96];
@@ -460,7 +477,7 @@ void publishDataSingle() {
 
   if (mqttConnect()) {
     memset(topicStr, 0, sizeof(topicStr));
-    sprintf(topicStr, "%s/%s", MQTT_BASE_TOPIC, MQTT_SUBTOPIC_CNT);
+    sprintf(topicStr, "%s/%s/%s", MQTT_BASE_TOPIC, systemID().c_str(), MQTT_SUBTOPIC_CNT);
     Serial.print(topicStr);
     Serial.print(F(" "));
     Serial.println(settings.counterTotal);
@@ -470,7 +487,7 @@ void publishDataSingle() {
     // publish total consumption if counter offset values is set
     if (settings.counterOffset > 0) {
       memset(topicStr, 0, sizeof(topicStr));
-      sprintf(topicStr, "%s/%s", MQTT_BASE_TOPIC, MQTT_SUBTOPIC_CONS);
+      sprintf(topicStr, "%s/%s/%s", MQTT_BASE_TOPIC, systemID().c_str(), MQTT_SUBTOPIC_CONS);
       Serial.print(topicStr);
       Serial.print(F(" "));
       totalConsumption = int((settings.counterTotal / (TURNS_PER_KWH * 1.0) + settings.counterOffset / 10.0) * 100) / 100.0;
@@ -480,15 +497,15 @@ void publishDataSingle() {
     }
 
     memset(topicStr, 0, sizeof(topicStr));
-    sprintf(topicStr, "%s/%s", MQTT_BASE_TOPIC, MQTT_SUBTOPIC_RUNT);
+    sprintf(topicStr, "%s/%s/%s", MQTT_BASE_TOPIC, systemID().c_str(), MQTT_SUBTOPIC_RUNT);
     Serial.print(topicStr);
     Serial.print(F(" "));
-    Serial.println(removeBlanks(getRuntime()));
-    mqtt.publish(topicStr, removeBlanks(getRuntime()), true);
+    Serial.println(getRuntime(true));
+    mqtt.publish(topicStr, getRuntime(true), true);
     delay(50);
 
     memset(topicStr, 0, sizeof(topicStr));
-    sprintf(topicStr, "%s/%s", MQTT_BASE_TOPIC, MQTT_SUBTOPIC_RSSI);
+    sprintf(topicStr, "%s/%s/%s", MQTT_BASE_TOPIC, systemID().c_str(), MQTT_SUBTOPIC_RSSI);
     Serial.print(topicStr);
     Serial.print(F(" "));
     Serial.println(WiFi.RSSI());
@@ -497,7 +514,7 @@ void publishDataSingle() {
 
 #ifdef DEBUG_HEAP
     memset(topicStr, 0, sizeof(topicStr));
-    sprintf(topicStr, "%s/%s", MQTT_BASE_TOPIC, MQTT_SUBTOPIC_HEAP);
+    sprintf(topicStr, "%s/%s/%s", MQTT_BASE_TOPIC, systemID().c_str(), MQTT_SUBTOPIC_HEAP);
     Serial.print(topicStr);
     Serial.print(F(" "));
     Serial.println(ESP.getFreeHeap());
@@ -508,10 +525,11 @@ void publishDataSingle() {
 #endif
 
 
-// publish data on base topic as JSON
+// publish all data on base topic as JSON
 #ifdef MQTT_PUBLISH_JSON
 void publishDataJSON() {
   StaticJsonDocument<128> JSON;
+  static char topicStr[96];
   char buf[128];
 
   if (mqttConnect()) {
@@ -519,16 +537,17 @@ void publishDataJSON() {
     if (settings.counterOffset > 0) {
       JSON[MQTT_SUBTOPIC_CONS] = int((settings.counterTotal / (TURNS_PER_KWH * 1.0) + settings.counterOffset / 10.0) * 100) / 100.0;
     }
-    JSON[MQTT_SUBTOPIC_RUNT] = getRuntime();
+    JSON[MQTT_SUBTOPIC_RUNT] = getRuntime(true);
     JSON[MQTT_SUBTOPIC_RSSI] = WiFi.RSSI();
 #ifdef DEBUG_HEAP
     JSON[MQTT_SUBTOPIC_HEAP] = ESP.getFreeHeap();
 #endif
     size_t s = serializeJson(JSON, buf);
-    Serial.print(MQTT_BASE_TOPIC);
+    sprintf(topicStr, "%s/%s", MQTT_BASE_TOPIC, systemID().c_str());
+    Serial.print(topicStr);
     Serial.print(F(" "));
     Serial.println(buf);
-    mqtt.publish(MQTT_BASE_TOPIC, buf, s);
+    mqtt.publish(topicStr, buf, s);
   }
 }
 #endif
@@ -569,22 +588,23 @@ int sortAsc(const void *val1, const void *val2) {
 }
 
 
-// calculate a suitable threshold for marker detection from analog sensor readings
+// calculate a suitable threshold to detect the red marker
+// on ferraris disk in analog sensor readings
 void calcThreshold() {
 
   // sort array with analog readings
   qsort(impulseReadings, readingsSize, sizeof(impulseReadings[0]), sortAsc);
 
-  // min, max, median and slightly corrected spread of all readings
+  // min, max and slightly corrected spread of all readings
   impulseMin = impulseReadings[0];
   impulseMax = impulseReadings[readingsSize - 1];
   impulseSpread = impulseReadings[(int)(readingsSize * 0.99)] - impulseReadings[(int)(readingsSize * 0.01)];
 
   if (impulseSpread >= READINGS_SPREAD_MIN) {
     // My Ferraris disk has a diameter of approx. 9cm => circumference about 28.3cm
-    // Length of marker on the disk is more or less 1cm => fraction of circumference about 1/20 => 3%
-    // Thus on at least(!) one full revolution of the ferraris disk all analog sensor
-    // readings above the 97% percentile should qualify as a suitable threshold value
+    // Length of marker on the disk is more or less 1cm => fraction of circumference about 1/30 => 3%
+    // Thus after at least(!) one full revolution of the ferraris disk all analog sensor
+    // readings above the 97% percentile should qualify as a suitable threshold values
     settings.impulseThreshold = impulseReadings[(int)(readingsSize * 0.97)];
 #ifdef LANGUAGE_EN
     setMessage("Threshold calculation successful!", 5);
@@ -613,7 +633,7 @@ void calcThreshold() {
 }
 
 
-// try to find a rise edge in previous analog readings
+// try to find a rising edge in previous analog readings
 bool findRisingEdge() {
   uint16_t i, belowThresholdTrigger;
   uint8_t s = 1;
@@ -654,7 +674,7 @@ bool findRisingEdge() {
 
 
 // For debugging purposes analog readings can be send to an InfluxDB via UDP
-// Visualizing the data with Grafana might help to determin the right threshold value
+// Visualizing the data with Grafana might help to determine the right threshold value
 #ifdef INFLUXDB_ENABLE
 void send2influx_udp(uint16_t counter, uint16_t threshold, uint16_t impulse) {
   unsigned long requestTimer = 0;
@@ -740,10 +760,10 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);  // Wemos D1 mini: LOW = on, HIGH = off
   pinMode(A0, INPUT);
 
+  connectWifi();
 #ifdef MQTT_ENABLE
   mqtt.setServer(MQTT_HOST_IP, 1883);
 #endif
-  connectWifi();
 
   // setup local webserver with all url handlers
   httpUpdater.setup(&httpServer);
@@ -790,7 +810,7 @@ void loop() {
   }
 
   // get analog reading from IR sensor
-  if (abs(currentMillis - previousMeasurementMillis) > READINGS_INTERVAL_MS) {
+  if (tsDiff(previousMeasurementMillis) > READINGS_INTERVAL_MS) {
     previousMeasurementMillis = currentMillis;
     impulseReading = analogRead(A0);
 
@@ -801,7 +821,7 @@ void loop() {
     // Threshold calculation: fill array with analog readings and then
     // try to derive a threshold value to detect a single revolution.
     // While pushing readings to the array for READINGS_TOTAL_SEC seconds
-    // make sure that the ferraris disk is turning fast enough: the
+    // make sure that the ferraris disk is spinning fast enough: the
     // red marker should pass by the IR sensor at least twice. You
     // might want to turn on your oven to help speed up things... ;-)
     if (readThreshold) {
@@ -835,7 +855,7 @@ void loop() {
     // count at least COUNTER_DEBOUNCE_SEC seconds have passed, the readings have
     // been above the threshold at least COUNTER_ABOVE_THRESHOLD consecutive times
     // and a rising edge was identified in recents readings
-    if (settings.impulseThreshold > 0 && (abs(currentMillis - previousCountMillis) > IMPULSE_DEBOUNCE_SEC * 1000) &&
+    if (settings.impulseThreshold > 0 && (tsDiff(previousCountMillis) > IMPULSE_DEBOUNCE_SEC * 1000) &&
         impulseReading >= settings.impulseThreshold && ++aboveThreshold >= ABOVE_THRESHOLD_TRIGGER && findRisingEdge()) {
 
       previousCountMillis = millis();
@@ -854,7 +874,7 @@ void loop() {
   }
 
   // frequently save counter readings and threshold to EEPROM
-  if (abs(currentMillis - previousSaveMillis) > BACKUP_CYCLE_MIN * 1000 * 60) {
+  if (tsDiff(previousSaveMillis) > BACKUP_CYCLE_MIN * 1000 * 60) {
 #ifdef LANGUAGE_EN
     Serial.println("Performing periodic EEPROM backup.");
 #else

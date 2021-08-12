@@ -1,5 +1,5 @@
 /*
-   ESP8266 Wifi Power Meter (Ferraris Counter) v1.2.1
+   ESP8266 Wifi Power Meter (Ferraris Counter) v1.2.2
 
    Hardware: Wemos D1 mini board + TCRT5000 IR sensor
    https://github.com/lrswss/esp8266-wifi-power-meter/
@@ -70,7 +70,7 @@
 #define INFLUXDB_DEVICE_TAG "TCRT5000"
 
 #define SKETCH_NAME "WifiPowerMeter"
-#define SKETCH_VERSION "1.2.1"
+#define SKETCH_VERSION "1.2.2"
 
 // the following settings should not be changed
 #define READINGS_TOTAL_SEC 90
@@ -124,6 +124,91 @@ uint16_t impulseIndex = 0;
 uint16_t impulseSpread = 0;
 uint16_t impulseMax = 0;
 uint16_t impulseMin = 0;
+
+
+// schedule a message for web ui
+void setMessage(const char *msg, int expireSeconds) {
+  memset(message, 0, sizeof(message));
+  strcpy(message, msg);
+  expireMessage = expireSeconds;
+}
+
+
+// get last reading from pseudo eeprom
+void readSettingsEEPROM() {
+  EEP.get(EEPROM_ADDR, settings);
+}
+
+
+// save current reading to pseudo eeprom
+void saveSettingsEEPROM() {
+  EEP.put(EEPROM_ADDR, settings);
+  EEP.commit();
+}
+
+
+// required for RESTful api
+void setCrossOrigin() {
+  httpServer.sendHeader(F("Access-Control-Allow-Origin"), F("*"));
+  httpServer.sendHeader(F("Access-Control-Max-Age"), F("600"));
+  httpServer.sendHeader(F("Access-Control-Allow-Methods"), F("GET,OPTIONS"));
+  httpServer.sendHeader(F("Access-Control-Allow-Headers"), F("*"));
+}
+
+
+// response for REST preflight request
+void sendCORS() {
+  setCrossOrigin();
+  httpServer.sendHeader(F("Access-Control-Allow-Credentials"), F("false"));
+  httpServer.send(204);
+}
+
+
+// rollover safe comparison for given timestamp with millis()
+int32_t tsDiff(uint32_t tsMillis) {
+  int32_t diff = millis() - tsMillis;
+  if (diff < 0)
+    return abs(diff);
+  else
+    return diff;
+}
+
+
+// returns total runtime (day/hours/minutes) as a string
+// has internal time keeping to cope with millis() rollover after 49 days
+// should be called from time to time to update interal counter
+char* getRuntime(bool noSpaces) {
+  static uint32_t lastMillis = 0;
+  static uint32_t seconds = 0;
+  static char runtime[16];
+
+  seconds += tsDiff(lastMillis) / 1000;
+  lastMillis = millis();
+
+  uint16_t days = seconds / 86400 ;
+  uint8_t hours = (seconds % 86400) / 3600;
+  uint8_t minutes = ((seconds % 86400) % 3600) / 60;
+  memset(runtime, 0, sizeof(runtime));
+  if (noSpaces) {
+    sprintf(runtime, "%dd%dh%dm", days, hours, minutes);
+  } else {
+    sprintf(runtime, "%dd %dh %dm", days, hours, minutes);
+  }
+
+  return runtime;
+}
+
+
+// returns hardware system id (last 3 bytes of mac address)
+// used for MQTT topic
+String systemID() {
+  uint8_t mac[6];
+  char sysid[7];
+
+  WiFi.macAddress(mac);
+  sprintf(sysid, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+  return String(sysid);
+}
 
 
 // standard event handler for webserver
@@ -298,66 +383,6 @@ void handleSetThreshold() {
 }
 
 
-// required for RESTful api
-void setCrossOrigin() {
-  httpServer.sendHeader(F("Access-Control-Allow-Origin"), F("*"));
-  httpServer.sendHeader(F("Access-Control-Max-Age"), F("600"));
-  httpServer.sendHeader(F("Access-Control-Allow-Methods"), F("GET,OPTIONS"));
-  httpServer.sendHeader(F("Access-Control-Allow-Headers"), F("*"));
-}
-
-
-// response for REST preflight request
-void sendCORS() {
-  setCrossOrigin();
-  httpServer.sendHeader(F("Access-Control-Allow-Credentials"), F("false"));
-  httpServer.send(204);
-}
-
-
-// schedule a message for web ui
-void setMessage(const char *msg, int expireSeconds) {
-  memset(message, 0, sizeof(message));
-  strcpy(message, msg);
-  expireMessage = expireSeconds;
-}
-
-
-// rollover safe comparison for given timestamp with millis()
-int32_t tsDiff(uint32_t tsMillis) {
-  int32_t diff = millis() - tsMillis;
-  if (diff < 0)
-    return abs(diff);
-  else
-    return diff;
-}
-
-
-// returns total runtime (day/hours/minutes) as a string
-// has internal time keeping to cope with millis() rollover after 49 days
-// should be called from time to time to update interal counter
-char* getRuntime(bool noSpaces) {
-  static uint32_t lastMillis = 0;
-  static uint32_t seconds = 0;
-  static char runtime[16];
-
-  seconds += tsDiff(lastMillis) / 1000;
-  lastMillis = millis();
-
-  uint16_t days = seconds / 86400 ;
-  uint8_t hours = (seconds % 86400) / 3600;
-  uint8_t minutes = ((seconds % 86400) % 3600) / 60;
-  memset(runtime, 0, sizeof(runtime));
-  if (noSpaces) {
-    sprintf(runtime, "%dd%dh%dm", days, hours, minutes);
-  } else {
-    sprintf(runtime, "%dd %dh %dm", days, hours, minutes);
-  }
-
-  return runtime;
-}
-
-
 // connect to local wifi network (dhcp) with a 10 second timeout
 // after five consecutive connection failures restart ESP
 void connectWifi() {
@@ -384,7 +409,7 @@ void connectWifi() {
     Serial.println(F("OK."));
     Serial.print(F("IP address: "));
     Serial.println(WiFi.localIP());
-    sprintf(rssi, "RSSI: %ld dBm", WiFi.RSSI());
+    sprintf(rssi, "RSSI: %d dBm", WiFi.RSSI());
     Serial.println(rssi);
   } else {
     Serial.println(F("FAILED!"));
@@ -404,18 +429,6 @@ void connectWifi() {
 }
 
 
-// returns hardware system id (last 3 bytes of mac address)
-// used for MQTT topic
-String systemID() {
-  uint8_t mac[6];
-  char sysid[7];
-
-  WiFi.macAddress(mac);
-  sprintf(sysid, "%02X%02X%02X", mac[3], mac[4], mac[5]);
-  return String(sysid);
-}
-
-
 // connect to MQTT server (with changing id on every attempt)
 #ifdef MQTT_ENABLE
 bool mqttConnect() {
@@ -427,7 +440,7 @@ bool mqttConnect() {
     connectWifi();
 
   while (!mqtt.connected() && mqtt_error < 3) {
-    snprintf(clientid, sizeof(clientid), MQTT_CLIENT_ID, random(0xffff));
+    snprintf(clientid, sizeof(clientid), MQTT_CLIENT_ID, (int)random(0xfffff));
 
 #ifdef LANGUAGE_EN
     Serial.print(F("Connecting to MQTT Broker "));
@@ -466,6 +479,7 @@ bool mqttConnect() {
     mqtt_error = 0;
     return false;
   }
+  return true;
 }
 
 
@@ -552,19 +566,6 @@ void publishDataJSON() {
 }
 #endif
 #endif // MQTT_ENABLE
-
-
-// get last reading from pseudo eeprom
-void readSettingsEEPROM() {
-  EEP.get(EEPROM_ADDR, settings);
-}
-
-
-// save current reading to pseudo eeprom
-void saveSettingsEEPROM() {
-  EEP.put(EEPROM_ADDR, settings);
-  EEP.commit();
-}
 
 
 // blinking led

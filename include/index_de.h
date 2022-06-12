@@ -37,6 +37,7 @@ const char MAIN_html[] PROGMEM = R"=====(
 var thresholdCalculation = 0;
 var thresholdSaved = 1;
 var pulseThreshold = -1;
+var currentPower = -2;
 var totalCounter = 0;
 var messageShown = 0;
 var msgType = 0;
@@ -76,6 +77,10 @@ function updateUI() {
     document.getElementById("resetCounter").style.display = "none";
   else
     document.getElementById("resetCounter").style.display = "block";
+  if (currentPower > -2)
+    document.getElementById("tr1").style.display = "table-row";
+  else
+    document.getElementById("tr1").style.display = "none";
 }
 
 function hideMessages() {
@@ -151,7 +156,8 @@ function getReadings() {
         msgTimeout = (json.msgTimeout * 1000);
       }
       document.getElementById("TotalCounter").innerHTML = json.totalCounter;
-      document.getElementById("TotalConsumption").innerHTML = (json.totalConsumption > 10 ? json.totalConsumption : "--");
+      document.getElementById("TotalConsumption").innerHTML = (json.totalConsumption > 0 ? json.totalConsumption : "--");
+      document.getElementById("CurrentPower").innerHTML = (json.currentPower > 0 ? json.currentPower : "--");
       document.getElementById("Runtime").innerHTML = json.runtime;
       document.getElementById("CurrentReadings").innerHTML = json.currentReadings;
       document.getElementById("TotalReadings").innerHTML = json.totalReadings;
@@ -161,6 +167,7 @@ function getReadings() {
       pulseThreshold = json.pulseThreshold;
       thresholdCalculation = json.thresholdCalculation;
       totalCounter = json.totalCounter;
+      currentPower = json.currentPower;
    	} 
   };
   xhttp.open("GET", "readings?local=true", true);
@@ -189,6 +196,7 @@ function getReadings() {
 <div id="readings" style="margin-top:5px;">
 <table style="min-width:340px">
 	<tr><th>Anzahl Umdrehungen:</th><td><span id="TotalCounter">--</span></td></tr>
+	<tr id="tr1"><th>Momentanleistung:</th><td><span id="CurrentPower">--</span> W</td></tr>
 	<tr><th>Gesamtverbrauch:</th><td><span id="TotalConsumption">--</span> kWh</td></tr>
 	<tr id="tr3"><th>A/D Messwerte:</th><td><span id="CurrentReadings">--</span>/<span id="TotalReadings">--</span></td></tr>
     <tr id="tr4"><th>Minimum/Maximum:</th><td><span id="PulseMin">--</span>/<span id="PulseMax">--</span></td></tr>
@@ -278,15 +286,15 @@ function configSaved() {
   <fieldset><legend><b>&nbsp;Ferraris-Abtastung&nbsp;</b></legend>
   <p><b>Schwellwert für Zählung (10-1023)</b><br />
   <input id="input_pulse_threshold" name="pulse_threshold" size="16" maxlength="4" value="__IMPULS_THRESHOLD__" onkeyup="digitsOnly(this);"></p>
-   <p><b>Varianz für Erkennung (4-40)</b><br />
+   <p><b>Varianz für Erkennung (3-30)</b><br />
   <input id="input_readings_spread" name="readings_spread" size="16" maxlength="2" value="__READINGS_SPREAD__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Abtastrate IR-Sensor (50-200 ms)</b><br />
+  <p><b>Abtastrate IR-Sensor (15-50 ms)</b><br />
   <input id="input_readings_interval" name="readings_interval" size="16" maxlength="3" value="__READINGS_INTERVAL__" onkeyup="digitsOnly(this);"></p>
   <p><b>Ringspeicher (30-120 Sek.)</b><br />
   <input id="input_readings_buffer" name="readings_buffer" size="16" maxlength="3" value="__READINGS_BUFFER__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Pulse für Zählung (3-10)</b><br />
+  <p><b>Pulse für Zählung (3-6)</b><br />
   <input id="input_threshold_tigger" name="threshold_trigger" size="16" maxlength="2" value="__THRESHOLD_TRIGGER__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Totzeit Zählungen (500-3000 ms)</b><br />
+  <p><b>Totzeit Zählungen (1000-3000 ms)</b><br />
   <input id="input_debounce_time" name="debounce_time" size="16" maxlength="4" value="__DEBOUNCE_TIME__" onkeyup="digitsOnly(this);"></p>
   </fieldset>
   <br />
@@ -424,9 +432,25 @@ function toggleMQTTAuth() {
   }
 }
 
+function togglePower() {
+  if (document.getElementById("checkbox_power").checked == true) {
+    document.getElementById("power").style.display = "block";
+  } else {
+    document.getElementById("power").style.display = "none";
+  }
+}
+
+function togglePowerAvg() {
+  if (document.getElementById("checkbox_power_avg").checked == true) {
+    document.getElementById("power_avg").style.display = "block";
+  } else {
+    document.getElementById("power_avg").style.display = "none";
+  }
+}
+
 </script>
 </head>
-<body onload="configSaved(); toggleMQTT(); toggleMQTTAuth();">
+<body onload="configSaved(); togglePower(); toggleMQTT(); toggleMQTTAuth(); togglePowerAvg();">
 <div style="text-align:left;display:inline-block;min-width:340px;">
 <div style="text-align:center;">
 <h2 id="heading">Einstellungen</h2>
@@ -449,6 +473,11 @@ function toggleMQTTAuth() {
   <input id="input_consumption_kwh" name="consumption_kwh" size="16" maxlength="9" value="__CONSUMPTION_KWH__" onkeyup="floatsOnly(this);"></p>
   <p><b>Backup Zählerstand (60-180 Min.)</b><br />
   <input id="input_backup_cycle" name="backup_cycle" size="16" maxlength="3" value="__BACKUP_CYCLE__" onkeyup="digitsOnly(this);"></p>
+  <p><input id="checkbox_power" name="current_power" onclick="togglePower();" type="checkbox" __CURRENT_POWER__><b>Momentanleistung errechnen</b></p>
+  <span id="power"><p><input id="checkbox_power_avg" name="current_power_avg" onclick="togglePowerAvg();" type="checkbox" __POWER_AVG__><b>Gleitender Durchschnitt</b></p>
+  <span id="power_avg"><p><b>Zeitraum (30-300 secs.)</b><br />
+  <input id="input_power_avg_secs" name="power_avg_secs" size="16" maxlength="3" value="__POWER_AVG_SECS__" onkeyup="digitsOnly(this);"></p></span>
+  </span>
   </fieldset>
   <br />
   
@@ -459,6 +488,7 @@ function toggleMQTTAuth() {
   <input id="input_mqttbroker" name="mqttbroker" size="16" maxlength="64" value="__MQTT_BROKER__" onkeyup="ASCIIOnly(this);"></p>
   <p><b>Topic f&uuml;r Nachrichten</b><br />
   <input id="input_mqttbasetopic" name="mqttbasetopic" size="16" maxlength="64" value="__MQTT_BASE_TOPIC__" onkeyup="ASCIIOnly(this);"></p>
+  <p><input id="checkbox_mqtt_json" name="mqtt_json" type="checkbox" __MQTT_JSON__><b>Daten als JSON publizieren</b></p>
   <p><b>Nachrichteninterval (Sek.)</b><br />
   <input name="mqttinterval" value="__MQTT_INTERVAL__" maxlength="4" onkeyup="digitsOnly(this);"></p>
   <p><input id="checkbox_mqttauth" name="mqttauth" onclick="toggleMQTTAuth();" type="checkbox" __MQTT_AUTH__><b>Authentifizierung aktivieren</b></p>
@@ -481,6 +511,16 @@ function toggleMQTTAuth() {
 
 
 const char UPDATE_html[] PROGMEM = R"=====(
+<script>
+function checkFile() {
+  if (!document.getElementById('firmware_file').value) {
+    alert('Bitte zuerst eine Firmware-Datei zum Hochladen auswählen.');
+    return false;
+  } else {
+    return true;
+  }
+}
+</script>
 </head>
 <body>
 <div style="text-align:left;display:inline-block;min-width:340px;">
@@ -494,8 +534,8 @@ const char UPDATE_html[] PROGMEM = R"=====(
 4. System neu starten
 </div>
 <div>
-<form method="POST" action="/update" enctype="multipart/form-data" id="upload_form">
-  <input type="file" name="update">
+<form method="POST" action="/update" enctype="multipart/form-data" id="upload_form" onsubmit="return checkFile();">
+  <input id="firmware_file" type="file" name="update">
   <p><button class="button bred" type="submit">Aktualisierung durchf&uuml;hren</button></p>
 </form>
 <p><button onclick="location.href='/';">Startseite</button></p>

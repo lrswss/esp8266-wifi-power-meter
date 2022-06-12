@@ -2,15 +2,16 @@
 
 ## Description
 
-<div align="center"><img src="assets/ferraris_meter.png"
-alt="Wemos D1 mini with TCRT5000 IR sensor mounted on ferraris electricity meter"></div><br>
+<p align="center"><img src="assets/ferraris_meter.png" alt="Wemos D1 mini
+with TCRT5000 IR sensor mounted on ferraris electricity meter"></p><br>
 
-Using an IR sensor, the revolutions of a Ferraris electricity 
-meter are detected and the meter reading is regularly published via MQTT.
-As visual feedback the blue LED on the Wemos D1 mini board will blink if 
+Using the analog output of an IR sensor, the revolutions of a Ferraris
+electricity meter are detected. The total meter reading (KWh) and current
+consumption (Watt) are displayed on an embedded web page and optionally published
+via MQTT. As visual feedback the blue LED on the Wemos D1 mini board blinks if
 the red marker has been detected. An embedded web server helps to adjust
-various parameters to fine-tune the sensor setup and also offers a simple 
-RESTful interface to retrieve the meter reading. The total consumption 
+various parameters to fine-tune the sensor setup and also offers a simple
+RESTful interface to retrieve the meter reading. The total consumption
 reading and sensor settings are frequently saved to (pseudo) EEPROM to
 migate counter resets due to possible intermediate power failures.
 
@@ -78,9 +79,9 @@ or whatever ESP8266 board you are using as the target platform under `Tools`.
 
 ## Hardware Schematics
 
-<div align="center">
+<p align="center">
 <img src="assets/schematics.png" alt="Schematics für Wifi Power Meter">
-</div>
+</p>
 
 Connect the 5V pin of the TCRT5000 sensor to 3.3V pin (not 5V!) of the Wemos
 board and its ground pin to GND. The analog output of the TCRT5000 sensor (A0)
@@ -89,7 +90,7 @@ can be powered with a small USB power supply (5V, around 250mA).
 
 ## Initial setup of WiFi connection
 
-After the first power-up, the [WifiManager](https://github.com/tzapu/WiFiManager) 
+After the first power-up, the [WifiManager](https://github.com/tzapu/WiFiManager)
 will create the access point `WifiPowerMeter-XXXXXX` (with no password) to connect
 the Wemos D1 to your local WiFi network. If you've set your WiFi credentials
 the ESP8266 will received an IP via DHCP (check serial debug message or your router).
@@ -124,11 +125,11 @@ to the value of the Ferraris meter (the default value is 75) and sync the
 current KWh reading of the meter with the setting `Current Consumption` of
 the Wifi Power Meter.
 
-<br><div align="center"><img align="top" src="assets/main_page.png" alt="main page of
+<br><p align="center"><img align="top" src="assets/main_page.png" alt="main page of
 embedded web server" width="250">&nbsp;&nbsp;&nbsp;<img align="top" src="assets/main_settings.png"
 alt="settings of the wifi power meter" width="250">&nbsp;&nbsp;&nbsp;<img align="top"
 src="assets/expert_settings.png" alt="expert settings to tune the detection of
-the red marker" width="250"></div><br>
+the red marker" width="250"></p><br>
 
 I'm using MQTT (enabled under `Settings`) to pass the meter readings to [home
 assistant](https://www.home-assistant.io) but the Wifi Power Meter also offers

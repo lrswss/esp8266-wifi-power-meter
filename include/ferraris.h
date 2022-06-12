@@ -15,8 +15,13 @@
 #define _FERRARIS_H
 
 #include <Arduino.h>
+#include <movingAvg.h>
+
+#define PULSE_HISTORY_SIZE 64
 
 typedef struct {
+    float consumption;
+    int16_t power;
     uint16_t size;
     uint16_t index;
     uint16_t spread;

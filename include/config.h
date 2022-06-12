@@ -26,6 +26,15 @@
 // to the specs of your ferraris meter
 #define TURNS_PER_KWH 75
 
+// calculate current power consumption (watts) from previous marker interval;
+// when the ferraris disk rotates rather slowly on low power consumption
+// this value can only be updated about once every 1-2 minutes
+#define CALCULATE_CURRENT_POWER
+
+// optionally apply a moving average to power consumption calculations
+// interval used for average calculation, set to 0 to disable
+#define POWER_AVG_SECS 60
+
 // publish power meter readings via MQTT (optional)
 //#define MQTT_ENABLE
 #define MQTT_PUBLISH_JSON
@@ -39,7 +48,7 @@
 // the following settings should be changed with care
 // better use web ui (expert settings) for fine-tuning 
 #define READINGS_BUFFER_SEC 90
-#define READINGS_INTERVAL_MS 50
+#define READINGS_INTERVAL_MS 25
 #define READINGS_SPREAD_MIN 4
 #define ABOVE_THRESHOLD_TRIGGER 3
 #define PULSE_DEBOUNCE_MS 2000
@@ -59,7 +68,7 @@
 // to make Arduino IDE happy
 // version number is set in platformio.ini
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION 200
+#define FIRMWARE_VERSION 210
 #endif
 
 #endif

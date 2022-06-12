@@ -21,6 +21,7 @@
 #define MQTT_CLIENT_ID      "PowerMeter_%x"
 #define MQTT_SUBTOPIC_CNT   "counter"
 #define MQTT_SUBTOPIC_CONS  "consumption"
+#define MQTT_SUBTOPIC_PWR   "power"
 #define MQTT_SUBTOPIC_RUNT  "runtime"
 #define MQTT_SUBTOPIC_RSSI  "rssi"
 #define MQTT_SUBTOPIC_HEAP  "freeheap"

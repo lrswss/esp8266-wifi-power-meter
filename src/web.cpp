@@ -48,13 +48,11 @@ static void sendCORS() {
 static void handleGetReadings() {
     StaticJsonDocument<384> JSON;
     static char reply[256];
-    float totalConsumption = 0.0;
 
     JSON.clear();
     JSON["totalCounter"] = settings.counterTotal;
-    totalConsumption = (settings.counterTotal / (settings.turnsPerKwh * 1.0)) 
-        + settings.counterOffset / 100.0;
-    JSON["totalConsumption"] = int(totalConsumption * 100) / 100.0;
+    JSON["totalConsumption"] = String(ferraris.consumption, 2);
+    JSON["currentPower"] = ferraris.power;
     JSON["runtime"] = getRuntime(false);
 
     // only relevant for power meter's web ui
@@ -98,7 +96,7 @@ void startWebserver() {
         html += FPSTR(MAIN_html);
         html += FPSTR(FOOTER_html);
         html.replace("__SYSTEMID__", systemID());
-        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION/100.0));
+        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
         html.replace("__BUILD__", String(__DATE__)+" "+String(__TIME__));
         Serial.println(F("Show main page"));
         httpServer.send(200, "text/html", html);
@@ -151,7 +149,7 @@ void startWebserver() {
         html += FPSTR(UPDATE_html);
         html += FPSTR(FOOTER_html);
         html.replace("__SYSTEMID__", systemID());
-        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION/100.0));
+        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
         html.replace("__BUILD__", String(__DATE__)+" "+String(__TIME__));
         Serial.println(F("Show firmware upload form"));
         httpServer.send(200, "text/html", html);
@@ -164,16 +162,28 @@ void startWebserver() {
         html += FPSTR(FOOTER_html);
         
         html.replace("__TURNS_KWH__", String(settings.turnsPerKwh));
-        html.replace("__CONSUMPTION_KWH__", 
-            String((settings.counterTotal / (settings.turnsPerKwh * 1.0)) + settings.counterOffset / 100.0));
+        html.replace("__CONSUMPTION_KWH__", String(ferraris.consumption, 2));
         html.replace("__BACKUP_CYCLE__", String(settings.backupCycleMin));
+        if (settings.calculateCurrentPower) 
+            html.replace("__CURRENT_POWER__", "checked");
+        else
+            html.replace("__CURRENT_POWER__", "");
+        if (settings.calculatePowerMvgAvg) 
+            html.replace("__POWER_AVG__", "checked");
+        else
+            html.replace("__POWER_AVG__", "");
+        html.replace("__POWER_AVG_SECS__", String(settings.powerAvgSecs));
 
-        if (settings.enableMQTT) 
+        if (settings.enableMQTT)
             html.replace("__MQTT__", "checked");
         else
             html.replace("__MQTT__", "");
         html.replace("__MQTT_BROKER__", String(settings.mqttBroker));
         html.replace("__MQTT_BASE_TOPIC__", String(settings.mqttBaseTopic));
+        if (settings.mqttJSON)
+            html.replace("__MQTT_JSON__", "checked");
+        else
+            html.replace("__MQTT_JSON__", "");
         html.replace("__MQTT_INTERVAL__", String(settings.mqttIntervalSecs));
         if (settings.mqttEnableAuth) 
             html.replace("__MQTT_AUTH__", "checked");
@@ -183,7 +193,7 @@ void startWebserver() {
         html.replace("__MQTT_PASSWORD__", String(settings.mqttPassword));
 
         html.replace("__SYSTEMID__", systemID());
-        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION/100.0));
+        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
         html.replace("__BUILD__", String(__DATE__)+" "+String(__TIME__));
         Serial.println(F("Show main configuration"));
         httpServer.send(200, "text/html", html);
@@ -193,11 +203,23 @@ void startWebserver() {
     httpServer.on("/config", HTTP_POST, []() {
         if (httpServer.arg("kwh_turns").toInt() >= 50 && httpServer.arg("kwh_turns").toInt() <= 500)
             settings.turnsPerKwh = httpServer.arg("kwh_turns").toInt();
-        if (httpServer.arg("consumption_kwh").toFloat() >= 10 && httpServer.arg("consumption_kwh").toFloat() <= 999999)
+        if (httpServer.arg("consumption_kwh").toFloat() >= 1 && httpServer.arg("consumption_kwh").toFloat() <= 999999)
             settings.counterOffset = (httpServer.arg("consumption_kwh").toFloat() * 100) - 
                 lround(settings.counterTotal * 100 / settings.turnsPerKwh);            
         if (httpServer.arg("backup_cycle").toInt() >= 60 && httpServer.arg("backup_cycle").toInt() <= 180)
             settings.backupCycleMin = httpServer.arg("backup_cycle").toInt();  
+        if (httpServer.arg("current_power") == "on") {
+            settings.calculateCurrentPower = true;
+            if (httpServer.arg("current_power_avg") == "on") {
+                settings.calculatePowerMvgAvg = true;
+                if (httpServer.arg("power_avg_secs").toInt() >= 30 && httpServer.arg("power_avg_secs").toInt() <= 300)
+                    settings.powerAvgSecs = httpServer.arg("power_avg_secs").toInt();
+            } else {
+                settings.calculatePowerMvgAvg = false;
+            }
+        } else {
+            settings.calculateCurrentPower = false;
+        }
 
         if (httpServer.arg("mqtt") == "on") {
             settings.enableMQTT = true;
@@ -207,6 +229,10 @@ void startWebserver() {
                 strncpy(settings.mqttBaseTopic, httpServer.arg("mqttbasetopic").c_str(), 63);
             if (httpServer.arg("mqttinterval").toInt() >= 10 && httpServer.arg("mqttinterval").toInt() <= 900)
                 settings.mqttIntervalSecs = httpServer.arg("mqttinterval").toInt();
+            if (httpServer.arg("mqtt_json") == "on")
+                settings.mqttJSON = true;
+            else
+                settings.mqttJSON = false;
             if (httpServer.arg("mqttauth") == "on") {
                 settings.mqttEnableAuth = true;
                 if (httpServer.arg("mqttuser").length() >= 4 && httpServer.arg("mqttuser").length() <= 31)
@@ -244,7 +270,7 @@ void startWebserver() {
             html.replace("__INFLUXDB__", "");
 
         html.replace("__SYSTEMID__", systemID());
-        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION/100.0));
+        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
         html.replace("__BUILD__", String(__DATE__)+" "+String(__TIME__));
         Serial.println(F("Show expert settings"));
         httpServer.send(200, "text/html", html);
@@ -254,15 +280,15 @@ void startWebserver() {
     httpServer.on("/expert", HTTP_POST, []() {
         if (httpServer.arg("pulse_threshold").toInt() >= 10 && httpServer.arg("pulse_threshold").toInt() <= 1023)
             settings.pulseThreshold = httpServer.arg("pulse_threshold").toInt();
-        if (httpServer.arg("readings_spread").toInt() >= 4 && httpServer.arg("readings_spread").toInt() <= 40)
+        if (httpServer.arg("readings_spread").toInt() >= 3 && httpServer.arg("readings_spread").toInt() <= 30)
             settings.readingsSpreadMin = httpServer.arg("readings_spread").toInt();
-        if (httpServer.arg("readings_interval").toInt() >= 50 && httpServer.arg("readings_interval").toInt() <= 200)
+        if (httpServer.arg("readings_interval").toInt() >= 15 && httpServer.arg("readings_interval").toInt() <= 50)
             settings.readingsIntervalMs = httpServer.arg("readings_interval").toInt();
         if (httpServer.arg("readings_buffer").toInt() >= 30 && httpServer.arg("readings_buffer").toInt() <= 120)
             settings.readingsBufferSec = httpServer.arg("readings_buffer").toInt();
-        if (httpServer.arg("threshold_trigger").toInt() >= 3 && httpServer.arg("threshold_trigger").toInt() <= 10)
+        if (httpServer.arg("threshold_trigger").toInt() >= 3 && httpServer.arg("threshold_trigger").toInt() <= 8)
             settings.aboveThresholdTrigger = httpServer.arg("threshold_trigger").toInt();
-        if (httpServer.arg("debounce_time").toInt() >= 500 && httpServer.arg("debounce_time").toInt() <= 3000)
+        if (httpServer.arg("debounce_time").toInt() >= 1000 && httpServer.arg("debounce_time").toInt() <= 3000)
             settings.pulseDebounceMs = httpServer.arg("debounce_time").toInt();
         if (httpServer.arg("influxdb") == "on")
             settings.enableInflux = true;
@@ -288,7 +314,7 @@ void startWebserver() {
             blinkLED(2, 250);
         }
         html += FPSTR(FOOTER_html);
-        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION/100.0));
+        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
         html.replace("__BUILD__", String(__DATE__)+" "+String(__TIME__));
         httpServer.send(200, "text/html", html);
     }, []() {

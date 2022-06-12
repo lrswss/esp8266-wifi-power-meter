@@ -40,9 +40,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    Serial.println();
-    Serial.print(F("\nStarting WifiPowerMeter v"));
-    Serial.println(FIRMWARE_VERSION/100.0);
+    Serial.printf("\n\nStarting WifiPowerMeter v%d\n", FIRMWARE_VERSION);
     Serial.printf("Compiled on %s, %s\n\n",__DATE__, __TIME__);
 
     initNVS();
@@ -71,7 +69,6 @@ void loop() {
     if (tsDiff(previousMeasurementMillis) > settings.readingsIntervalMs) {
         previousMeasurementMillis = millis();
         if (readFerraris()) {
-            settings.counterTotal++;
             blinkLED(2, 200);
             if (settings.enableMQTT)
                 mqttPublish();

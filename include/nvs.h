@@ -25,6 +25,9 @@ typedef struct {
     uint16_t pulseThreshold;
     uint16_t turnsPerKwh;
     uint16_t backupCycleMin;
+    bool calculateCurrentPower;
+    bool calculatePowerMvgAvg;
+    uint16_t powerAvgSecs;
     uint8_t readingsBufferSec;
     uint8_t readingsIntervalMs;
     uint8_t readingsSpreadMin;

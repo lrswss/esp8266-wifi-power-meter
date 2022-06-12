@@ -20,8 +20,10 @@
 
 
 static int16_t *pulseReadings;
+static movingAvg pulseInterval(PULSE_HISTORY_SIZE);
 bool thresholdCalculation = false;
 ferrarisReadings_t ferraris;
+
 
 // helper function for qsort() to sort the array with analog readings
 static int sortAsc(const void *val1, const void *val2) {
@@ -34,6 +36,9 @@ static int sortAsc(const void *val1, const void *val2) {
 // reset sensor readings
 static void resetReadings() {
     memset(pulseReadings, 0, ferraris.size * sizeof(int16_t));
+    ferraris.consumption = (settings.counterTotal / (settings.turnsPerKwh * 1.0))
+        + (settings.counterOffset / 100.0);
+    ferraris.power = settings.calculateCurrentPower ? -1 : -2;
     ferraris.index = 0;
     ferraris.spread = 0;
     ferraris.max = 0;
@@ -128,6 +133,37 @@ static bool findRisingEdge() {
 }
 
 
+// Calcultate current power consumption based on moving average
+// over given number of seconds. If secs is zero, calculate power
+// only based on the most recent pulse interval of the red marker.
+// When the ferraris disk rotates rather slowly on low power
+// consumption this value can only be updated about once every
+// 1-2 minutes on a meter with 75 kwh/turn.
+static int16_t calculateCurrentPower(uint16_t secs) {
+    uint32_t sumAvg = 0;
+    uint8_t pulses = 0;
+
+    if (secs > 0) {
+        for (uint8_t i = 1; i <= pulseInterval.getCount(); i++) {
+            sumAvg += pulseInterval.getAvg(i);  // tenth of sec
+            if (sumAvg)
+                pulses++;
+            if (sumAvg > (secs * 100))
+                break;
+        }
+    }
+
+    if (!settings.calculateCurrentPower) {
+        return -2;
+    } else if (pulseInterval.getCount() > 0) {
+        pulses = (secs == 0) ? 1 : pulses;  // only consider last pulse interval (no moving avg)
+        return int(3600000 / (settings.turnsPerKwh * (pulseInterval.getAvg(pulses)/10.0)));
+    } else {
+        return -1;
+    }
+}
+
+
 // setup pin for IR sensor and allocate array for pulse readings
 void initFerraris() {
     ferraris.size = (int)(settings.readingsBufferSec * 1000 / settings.readingsIntervalMs);
@@ -140,6 +176,7 @@ void initFerraris() {
         }
     }
     pinMode(A0, INPUT);
+    pulseInterval.begin();
     resetReadings();
 }
 
@@ -148,6 +185,7 @@ void initFerraris() {
 // returns true if system is calibrated and red marker was identified
 bool readFerraris() {
     static uint32_t previousCountMillis = 0;
+    static uint8_t cutDwnCnt = 0;
     static uint8_t aboveThreshold = 0;
     uint16_t pulseReading;
 
@@ -183,10 +221,32 @@ bool readFerraris() {
             ++aboveThreshold >= settings.aboveThresholdTrigger && 
             findRisingEdge()) {
 
+        // keep history of recents pulse intervals (saved as tenth of second)
+        // for optional moving average, see calculateCurrentPower() below
+        if (previousCountMillis > 0)
+            pulseInterval.reading(tsDiff(previousCountMillis) / 100);
+
+        settings.counterTotal++;
         previousCountMillis = millis();
         aboveThreshold = 0;
+        cutDwnCnt = 0;
+
+        // (re)calculate total consumption (kwh) and current power consumption (watt)
+        ferraris.consumption = (settings.counterTotal / (settings.turnsPerKwh * 1.0))
+                + (settings.counterOffset / 100.0);
+        ferraris.power = calculateCurrentPower(settings.calculatePowerMvgAvg ? settings.powerAvgSecs : 0);
+
         return true;
     }
+
+    // after a peak in consumption, this helps to bring the reading
+    // for the most recent pulse interval back down more quickly
+    if (pulseInterval.getAvg(1) > 0 &&
+            (tsDiff(previousCountMillis)/100 > (pulseInterval.getAvg(cutDwnCnt+1)*(cutDwnCnt+1)))) {
+        pulseInterval.reading(tsDiff(previousCountMillis)/100);
+        cutDwnCnt++;
+    }
+
     return false;
 }
 

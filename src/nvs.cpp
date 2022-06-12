@@ -22,6 +22,17 @@ settings_t defaultSettings = {
     0,
     TURNS_PER_KWH,
     BACKUP_CYCLE_MIN,
+#ifdef CALCULATE_CURRENT_POWER
+    true,
+#else
+    false,
+#endif
+#if POWER_AVG_SECS > 0
+    true,
+#else
+    false,
+#endif
+    POWER_AVG_SECS,
     READINGS_BUFFER_SEC,
     READINGS_INTERVAL_MS,
     READINGS_SPREAD_MIN,

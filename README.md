@@ -69,6 +69,7 @@ installed with the [Arduino IDE library manager](https://www.arduino.cc/en/Guide
 * [PubSubClient](https://github.com/knolleary/pubsubclient/releases)
 * [EEPROM_Rotate](https://github.com/xoseperez/eeprom_rotate)
 * [WiFiManager](https://github.com/tzapu/WiFiManager)
+* [movingAvg](https://github.com/JChristensen/movingAvg)
 
 Since the Arduino IDE requires all files to be in one folder, you need to move
 the header files from `include` to `src`. Then rename `main.cpp` to `powermeter.ino`

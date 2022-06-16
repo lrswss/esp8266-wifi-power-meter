@@ -512,20 +512,52 @@ function togglePowerAvg() {
 
 const char UPDATE_html[] PROGMEM = R"=====(
 <script>
-function checkFile() {
-  if (!document.getElementById('firmware_file').value) {
-    alert('Please select a firmware file for upload.');
-    return false;
-  } else {
-    return true;
+function initPage() {
+  document.getElementById('upload_form').onsubmit = function(e) {
+    e.preventDefault();
+    var uploadForm = new FormData();
+    var firmwareFile = document.getElementById('firmware_file').files[0];
+    if (!firmwareFile) {
+      alert('Please select a firmware file for upload.');
+      return false;
+    }
+    uploadForm.append("files", firmwareFile, firmwareFile.name);
+    var xhttp = new XMLHttpRequest();
+    xhttp.upload.addEventListener("progress", function(e) {
+      if (e.lengthComputable) {
+        var percent = Math.round((e.loaded/e.total)*100);
+        var progress = document.getElementById('progress');
+        if (percent == 100) {
+            progress.value = percent;
+            progress.style.display = "none";
+            document.getElementById('install').style.display = "block";
+        } else {
+            progress.style.display = "block";
+            progress.value = percent;
+        }
+      }
+    }, false);
+    xhttp.open("POST", "/update", true);
+    xhttp.onload = function() {
+      if (xhttp.status == 200) {
+        location.href='/update?res=ok';
+        return true;
+      } else {
+        location.href='/update?res=err';
+        return false;
+      }
+    };
+    xhttp.send(uploadForm);
   }
 }
 </script>
 </head>
-<body>
+<body onload="initPage();">
 <div style="text-align:left;display:inline-block;min-width:340px;">
 <div style="text-align:center;">
 <h2>Firmware update</h2>
+<progress id="progress" style="display:none;margin: 17px 0px 6px 50px;width:235px" value="0" max="100"></progress>
+<div id="install" style="display:none;margin-top:10px;text-align:center;color:red"><strong>Installing update...</strong></div>
 </div>
 <div style="margin-left:50px;margin-bottom:10px">
 1. Select firmware file<br>
@@ -534,8 +566,8 @@ function checkFile() {
 4. Restart system
 </div>
 <div>
-<form method="POST" action="/update" enctype="multipart/form-data" id="upload_form" onsubmit="return checkFile();">
-  <input id="firmware_file" type="file" name="update">
+<form method="POST" action="#" enctype="multipart/form-data" id="upload_form">
+  <input id="firmware_file" type="file" accept=".bin" name="update">
   <p><button class="button bred" type="submit">Start update</button></p>
 </form>
 <p><button onclick="location.href='/';">Main page</button></p>

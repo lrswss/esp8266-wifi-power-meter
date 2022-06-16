@@ -146,12 +146,20 @@ void startWebserver() {
     // show upload form for firmware update
     httpServer.on("/update", HTTP_GET, []() {
         String html = FPSTR(HEADER_html);
-        html += FPSTR(UPDATE_html);
+        if (httpServer.arg("res") == "ok") {
+            html += FPSTR(UPDATE_OK_html);
+            Serial.println(F("Show firmware upload success"));
+        } else if (httpServer.arg("res") == "err") {
+            html += FPSTR(UPDATE_ERR_html);
+            Serial.println(F("Show firmware upload failed"));
+        } else {
+            html += FPSTR(UPDATE_html);
+            Serial.println(F("Show firmware upload form"));
+        }
         html += FPSTR(FOOTER_html);
         html.replace("__SYSTEMID__", systemID());
         html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
         html.replace("__BUILD__", String(__DATE__)+" "+String(__TIME__));
-        Serial.println(F("Show firmware upload form"));
         httpServer.send(200, "text/html", html);
     });  
 
@@ -203,9 +211,11 @@ void startWebserver() {
     httpServer.on("/config", HTTP_POST, []() {
         if (httpServer.arg("kwh_turns").toInt() >= 50 && httpServer.arg("kwh_turns").toInt() <= 500)
             settings.turnsPerKwh = httpServer.arg("kwh_turns").toInt();
-        if (httpServer.arg("consumption_kwh").toFloat() >= 1 && httpServer.arg("consumption_kwh").toFloat() <= 999999)
+        if (httpServer.arg("consumption_kwh").toFloat() >= 1 && httpServer.arg("consumption_kwh").toFloat() <= 999999) {
+            ferraris.consumption = httpServer.arg("consumption_kwh").toFloat();
             settings.counterOffset = (httpServer.arg("consumption_kwh").toFloat() * 100) - 
-                lround(settings.counterTotal * 100 / settings.turnsPerKwh);            
+                    lround(settings.counterTotal * 100 / settings.turnsPerKwh);
+        }
         if (httpServer.arg("backup_cycle").toInt() >= 60 && httpServer.arg("backup_cycle").toInt() <= 180)
             settings.backupCycleMin = httpServer.arg("backup_cycle").toInt();  
         if (httpServer.arg("current_power") == "on") {
@@ -303,20 +313,15 @@ void startWebserver() {
 
     // handle firmware upload
     httpServer.on("/update", HTTP_POST, []() {
-        String html = FPSTR(HEADER_html);
         if (Update.hasError()) {
-            html += FPSTR(UPDATE_ERR_html);
             Serial.println(("OTA failed"));
+            httpServer.send(500, "text/plain", "err");
             blinkLED(4, 50);
         } else {
-            html += FPSTR(UPDATE_OK_html);
             Serial.println(("OTA successful"));
+            httpServer.send(200, "text/plain", "ok");
             blinkLED(2, 250);
         }
-        html += FPSTR(FOOTER_html);
-        html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
-        html.replace("__BUILD__", String(__DATE__)+" "+String(__TIME__));
-        httpServer.send(200, "text/html", html);
     }, []() {
         HTTPUpload& upload = httpServer.upload();
         if (upload.status == UPLOAD_FILE_START) {

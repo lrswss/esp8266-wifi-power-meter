@@ -181,15 +181,15 @@ function getReadings() {
 <div style="text-align:center;">
 <h2 id="heading">Ferraris Meter __SYSTEMID__</h2>
 <div id="message" style="display:none;margin-top:10px;color:red;text-align:center;font-weight:bold;max-width:335px">
-<span id="invalidThreshold" style="display:none">Invalid threshold value!</span>
-<span id="thresholdCalculation" style="display:none">Calculating threshold, please wait!</span>
-<span id="thresholdFound" style="display:none;color:green">Threshold calculation successful!</span>
-<span id="thresholdReset" style="display:none;color:green">Counter reset successful!</span>
-<span id="thresholdSaved" style="display:none;color:green">Pulse threshold set successfully!</span>
-<span id="thresholdFailed" style="display:none">Readings not sufficient!</span>
-<span id="publishFailed" style="display:none">Failed to publish data via MQTT!</span>
+<span id="invalidThreshold" style="display:none">Invalid threshold value</span>
+<span id="thresholdCalculation" style="display:none">Calculating threshold, please wait</span>
+<span id="thresholdFound" style="display:none;color:green">Threshold calculation successful</span>
+<span id="thresholdReset" style="display:none;color:green">Counter reset successful</span>
+<span id="thresholdSaved" style="display:none;color:green">Pulse threshold set successfully</span>
+<span id="thresholdFailed" style="display:none">Readings not sufficient</span>
+<span id="publishFailed" style="display:none">Failed to publish data via MQTT</span>
 <span id="restartSystem" style="display:none">System will restart shortly...</span>
-<span id="publishData" style="display:none">Published data via MQTT</span>
+<span id="publishData" style="display:none;color:green">Published data via MQTT</span>
 </div>
 <noscript>Please enable JavaScript!<br/></noscript>
 </div>

@@ -32,15 +32,22 @@ static bool mqttConnect() {
     mqtt.setServer(settings.mqttBroker, 1883);
     while (!mqtt.connected() && mqtt_error < 3) {
         snprintf(clientid, sizeof(clientid), MQTT_CLIENT_ID, (int)random(0xfffff));
-        Serial.printf("Connecting to MQTT Broker %s as %s...", settings.mqttBroker, clientid);
-        if (mqtt.connect(clientid)) {
+        Serial.printf("Connecting to MQTT Broker %s as %s", settings.mqttBroker, clientid);
+        if (settings.mqttEnableAuth)
+            Serial.printf(" with username %s", settings.mqttUsername);
+        Serial.print("...");
+        if (settings.mqttEnableAuth && mqtt.connect(clientid, settings.mqttUsername, settings.mqttPassword)) {
+            Serial.println(F("OK."));
+            mqtt_error = 0;
+            return true;
+        } else if (!settings.mqttEnableAuth && mqtt.connect(clientid)) {
             Serial.println(F("OK."));
             mqtt_error = 0;
             return true;
         } else {
             mqtt_error++;
             Serial.printf("failed (error %d)\n", mqtt.state());
-            delay(1000);
+            delay(250);
         }
     }
 
@@ -58,6 +65,7 @@ static void publishDataSingle() {
     static char topicStr[128];
 
     if (mqttConnect()) {
+        setMessage("publishData", 3);
         snprintf(topicStr, sizeof(topicStr), "%s/%s/%s", 
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_CNT);
         Serial.printf("MQTT %s %d\n", topicStr, settings.counterTotal);
@@ -118,6 +126,7 @@ static void publishDataJSON() {
 
     JSON.clear();
     if (mqttConnect()) {
+        setMessage("publishData", 3);
         JSON[MQTT_SUBTOPIC_CNT] = settings.counterTotal;
         if (ferraris.consumption > 0)
             JSON[MQTT_SUBTOPIC_CONS] =  int(ferraris.consumption * 100) / 100.0;
@@ -141,7 +150,6 @@ static void publishDataJSON() {
 // publish meter reading updates on single 
 // topic as JSON or on multiple topics 
 void mqttPublish() {
-    setMessage("publishData", 3);
     if (settings.mqttJSON)
         publishDataJSON();
     else

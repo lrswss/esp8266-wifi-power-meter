@@ -15,6 +15,7 @@
 #include "wlan.h"
 #include "utils.h"
 
+WiFiManager wm;
 
 // connect to local WiFi or automatically start access 
 // point with WiFiManager if not yet configured

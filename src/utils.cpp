@@ -15,8 +15,6 @@
 #include "wlan.h"
 #include "nvs.h"
 
-WiFiManager wm;
-
 // rollover safe comparison for given timestamp with millis()
 int32_t tsDiff(uint32_t tsMillis) {
   int32_t diff = millis() - tsMillis;

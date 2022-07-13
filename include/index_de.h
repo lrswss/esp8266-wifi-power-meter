@@ -181,15 +181,15 @@ function getReadings() {
 <div style="text-align:center;">
 <h2 id="heading">Stromz&auml;hler __SYSTEMID__</h2>
 <div id="message" style="display:none;margin-top:10px;color:red;text-align:center;font-weight:bold;max-width:335px">
-<span id="invalidThreshold" style="display:none">Ungültiger Schwellwert!</span>
-<span id="thresholdCalculation" style="display:none">Schwellwertmessung, bitte warten!</span>
-<span id="thresholdFound" style="display:none;color:green">Schwellwertberechnung erfolgreich!</span>
-<span id="thresholdReset" style="display:none;color:green">Zähler zurückgesetzt!</span>
-<span id="thresholdSaved" style="display:none;color:green">Schwellwert gespeichert!</span>
-<span id="thresholdFailed" style="display:none">Messwerte nicht ausreichend!</span>
-<span id="publishFailed" style="display:none">Publizieren über MQTT fehlgeschlagen!</span>
+<span id="invalidThreshold" style="display:none">Ungültiger Schwellwert</span>
+<span id="thresholdCalculation" style="display:none">Schwellwertmessung, bitte warten</span>
+<span id="thresholdFound" style="display:none;color:green">Schwellwertberechnung erfolgreich</span>
+<span id="thresholdReset" style="display:none;color:green">Zähler zurückgesetzt</span>
+<span id="thresholdSaved" style="display:none;color:green">Schwellwert gespeichert</span>
+<span id="thresholdFailed" style="display:none">Messwerte nicht ausreichend</span>
+<span id="publishFailed" style="display:none">Publizieren über MQTT fehlgeschlagen</span>
 <span id="restartSystem" style="display:none">System wird neu gestartet...</span>
-<span id="publishData" style="display:none">Daten über MQTT publiziert</span>
+<span id="publishData" style="display:none;color:green">Daten über MQTT publiziert</span>
 </div>
 <noscript>Bitte JavaScript aktivieren!<br/></noscript>
 </div>

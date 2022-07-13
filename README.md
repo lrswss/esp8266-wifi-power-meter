@@ -95,7 +95,7 @@ After the first power-up, the [WifiManager](https://github.com/tzapu/WiFiManager
 will create the access point `WifiPowerMeter-XXXXXX` (with no password) to connect
 the Wemos D1 to your local WiFi network. If you've set your WiFi credentials
 the ESP8266 will received an IP via DHCP (check serial debug message or your router).
-Point you favourite browser to the IP. If you can establish a connection to the
+Point your favourite browser to the IP. If you can establish a connection to the
 embebbed web server, you can proceed mounting the sensor and the controller board
 on your ferraris meter.
 

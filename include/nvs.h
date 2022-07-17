@@ -35,6 +35,7 @@ typedef struct {
     uint16_t pulseDebounceMs;
     bool enableMQTT;
     char mqttBroker[65];
+    uint16_t mqttBrokerPort;
     char mqttBaseTopic[65];
     uint16_t mqttIntervalSecs;
     bool mqttEnableAuth;
@@ -42,6 +43,7 @@ typedef struct {
     char mqttPassword[33];
     bool mqttJSON;
     bool enableInflux;
+    char systemID[17];
     uint8_t magic;
 } settings_t;
 

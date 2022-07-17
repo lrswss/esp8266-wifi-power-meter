@@ -10,7 +10,7 @@ const char HEADER_html[] PROGMEM = R"=====(
 <style>
 body{text-align:center;font-family:verdana;background:white;}
 div,fieldset,input,select{padding:5px;font-size:1em;}
-h2{margin-top:2px;margin-bottom:8px}
+h2{margin-top:2px;margin-bottom:8px;width:340px}
 h3{font-size:0.8em;margin-top:-2px;margin-bottom:2px;font-weight:lighter;}
 p{margin:0.5em 0;}
 a{text-decoration:none;color:inherit;}
@@ -374,16 +374,17 @@ function checkInput() {
     err++;
   }
 
-  if (document.getElementById("checkbox_mqtt").checked == true && 
-    (document.getElementById("input_mqttbroker").length < 4 || 
-     document.getElementById("input_mqttbasetopic").length < 4)) {
+  if (document.getElementById("checkbox_mqtt").checked == true &&
+    (document.getElementById("input_mqttbroker").value.length < 4 ||
+     document.getElementById("input_mqttbasetopic").value.length < 4 ||
+     document.getElementById("input_mqttport").value.length < 4)) {
     document.getElementById("mqttError").style.display = "block";
     err++;
   }
 
   if (document.getElementById("checkbox_mqttauth").checked == true && 
-    (document.getElementById("input_mqttuser").length < 4 || 
-     document.getElementById("input_mqttpassword").length < 4)) {
+    (document.getElementById("input_mqttuser").value.length < 4 ||
+     document.getElementById("input_mqttpassword").value.length < 4)) {
     document.getElementById("mqttAuthError").style.display = "block";
     err++;
   }
@@ -456,10 +457,10 @@ function togglePowerAvg() {
 <h2 id="heading">Settings</h2>
 <div id="message" style="display:none;margin-top:10px;color:red;font-weight:bold;text-align:center;max-width:335px">
 <span id="configSaved" style="display:none;color:green">Saved setttings</span>
-<span id="counterError" style="display:none">Check counter reading!</span>
-<span id="kwhError" style="display:none">Check value for KWh/revolution!</span>
-<span id="mqttError" style="display:none">Check MQTT setting!</span>
-<span id="mqttAuthError" style="display:none">Check MQTT username/password!</span>
+<span id="counterError" style="display:none">Check counter reading</span>
+<span id="kwhError" style="display:none">Check value for KWh/revolution</span>
+<span id="mqttError" style="display:none">Check MQTT settings</span>
+<span id="mqttAuthError" style="display:none">Check MQTT username/password</span>
 <span id="restartSystem" style="display:none;color:red">System will restart shortly...</span>
 </div>
 </div>
@@ -471,6 +472,8 @@ function togglePowerAvg() {
   <input id="input_kwh_turns" name="kwh_turns" size="16" maxlength="3" value="__TURNS_KWH__" onkeyup="digitsOnly(this);"></p>
   <p><b>Current meter reading (KWh)</b><br />
   <input id="input_consumption_kwh" name="consumption_kwh" size="16" maxlength="9" value="__CONSUMPTION_KWH__" onkeyup="floatsOnly(this);"></p>
+  <p><b>Power meter ID (optional)</b><br />
+  <input id="input_meter_id" name="meter_id" size="16" maxlength="16" value="__METER_ID__" onkeyup="ASCIIOnly(this);"></p>
   <p><b>Auto-backup counter (60-180 min.)</b><br />
   <input id="input_backup_cycle" name="backup_cycle" size="16" maxlength="3" value="__BACKUP_CYCLE__" onkeyup="digitsOnly(this);"></p>
   <p><input id="checkbox_power" name="current_power" onclick="togglePower();" type="checkbox" __CURRENT_POWER__><b>Calculate current consumption</b></p>
@@ -486,6 +489,8 @@ function togglePowerAvg() {
   <span id="mqtt" style="display:none">
   <p><b>Hostname broker</b><br />
   <input id="input_mqttbroker" name="mqttbroker" size="16" maxlength="64" value="__MQTT_BROKER__" onkeyup="ASCIIOnly(this);"></p>
+  <p><b>Port (default 1883)</b><br />
+  <input id="input_mqttport" name="mqttport" size="16" maxlength="5" value="__MQTT_PORT__" onkeyup="digitsOnly(this);"></p>
   <p><b>Message topic</b><br />
   <input id="input_mqttbasetopic" name="mqttbasetopic" size="16" maxlength="64" value="__MQTT_BASE_TOPIC__" onkeyup="ASCIIOnly(this);"></p>
   <p><input id="checkbox_mqtt_json" name="mqtt_json" type="checkbox" __MQTT_JSON__><b>Publish data as JSON</b></p>

@@ -172,6 +172,7 @@ void startWebserver() {
         html.replace("__TURNS_KWH__", String(settings.turnsPerKwh));
         html.replace("__CONSUMPTION_KWH__", String(ferraris.consumption, 2));
         html.replace("__BACKUP_CYCLE__", String(settings.backupCycleMin));
+        html.replace("__METER_ID__", systemID());
         if (settings.calculateCurrentPower) 
             html.replace("__CURRENT_POWER__", "checked");
         else
@@ -187,6 +188,7 @@ void startWebserver() {
         else
             html.replace("__MQTT__", "");
         html.replace("__MQTT_BROKER__", String(settings.mqttBroker));
+        html.replace("__MQTT_PORT__", String(settings.mqttBrokerPort));
         html.replace("__MQTT_BASE_TOPIC__", String(settings.mqttBaseTopic));
         if (settings.mqttJSON)
             html.replace("__MQTT_JSON__", "checked");
@@ -216,6 +218,10 @@ void startWebserver() {
             settings.counterOffset = (httpServer.arg("consumption_kwh").toFloat() * 100) - 
                     lround(settings.counterTotal * 100 / settings.turnsPerKwh);
         }
+        if (httpServer.arg("meter_id").length() >= 1 && httpServer.arg("meter_id").length() <= 16)
+            strncpy(settings.systemID, httpServer.arg("meter_id").c_str(), 16);
+        else
+            memset(settings.systemID, 0, sizeof(settings.systemID));
         if (httpServer.arg("backup_cycle").toInt() >= 60 && httpServer.arg("backup_cycle").toInt() <= 180)
             settings.backupCycleMin = httpServer.arg("backup_cycle").toInt();  
         if (httpServer.arg("current_power") == "on") {
@@ -235,6 +241,8 @@ void startWebserver() {
             settings.enableMQTT = true;
             if (httpServer.arg("mqttbroker").length() >= 4 && httpServer.arg("mqttbroker").length() <= 63)
                 strncpy(settings.mqttBroker, httpServer.arg("mqttbroker").c_str(), 63);
+            if (httpServer.arg("mqttport").toInt() >= 1023 && httpServer.arg("mqttport").toInt() <= 65535)
+                settings.mqttBrokerPort = httpServer.arg("mqttport").toInt();
             if (httpServer.arg("mqttbasetopic").length() >= 4 && httpServer.arg("mqttbasetopic").length() <= 63)
                 strncpy(settings.mqttBaseTopic, httpServer.arg("mqttbasetopic").c_str(), 63);
             if (httpServer.arg("mqttinterval").toInt() >= 10 && httpServer.arg("mqttinterval").toInt() <= 900)
@@ -252,6 +260,7 @@ void startWebserver() {
             } else {
                 settings.mqttEnableAuth = false;
             }
+            mqtt.disconnect();
         } else {
             settings.enableMQTT = false;
         }
@@ -314,11 +323,11 @@ void startWebserver() {
     // handle firmware upload
     httpServer.on("/update", HTTP_POST, []() {
         if (Update.hasError()) {
-            Serial.println(("OTA failed"));
+            Serial.println(F("OTA failed"));
             httpServer.send(500, "text/plain", "err");
             blinkLED(4, 50);
         } else {
-            Serial.println(("OTA successful"));
+            Serial.println(F("OTA successful"));
             httpServer.send(200, "text/plain", "ok");
             blinkLED(2, 250);
         }

@@ -19,18 +19,19 @@ WiFiUDP udp;
 // For debugging purposes analog readings can be send to an InfluxDB via UDP
 // Visualizing the data with Grafana might help to determine the right threshold value
 void send2influx_udp(uint16_t counter, uint16_t threshold, uint16_t pulse) {
-    unsigned long requestTimer = 0;
+    static char measurement[128];
+    uint32_t requestTimer = 0;
 
     // create request with curr2ent/voltage values according to influxdb line protocol
     // https://docs.influxdata.com/influxdb/v1.7/guides/writing_data/
-    String content = "esp8266_stromzaehler,device=" + String(INFLUXDB_DEVICE_TAG)
-                    + " counter=" + String(counter) + ",threshold=" + String(threshold) + ",pulse=" + String(pulse);
+    sprintf(measurement, "esp8266_power_meter,device=%s,counter=%d,threshold=%d,pulse=%d\n",
+                INFLUXDB_DEVICE_TAG, counter, threshold, pulse);
 
     // send udp packet
-    Serial.print("UDP (:" + String(INFLUXDB_HOST) + ":" + String(INFLUXDB_UDP_PORT) + "): " + String(content));
+    Serial.printf("UDP (%s:%d): %s", INFLUXDB_HOST, INFLUXDB_UDP_PORT, measurement);
     requestTimer = millis();
     udp.beginPacket(INFLUXDB_HOST, INFLUXDB_UDP_PORT);
-    udp.print(content);
+    udp.print(String(measurement));
     udp.endPacket();
-    Serial.println(" (" + String(millis() - requestTimer) + "ms)");
+    Serial.printf(" (%ld ms)", millis() - requestTimer);
 }

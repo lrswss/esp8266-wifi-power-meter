@@ -44,6 +44,7 @@ settings_t defaultSettings = {
     false,
 #endif
     MQTT_BROKER_HOSTNAME,
+    MQTT_BROKER_PORT,
     MQTT_BASE_TOPIC,
     MQTT_PUBLISH_INTERVAL_SEC,
 #if defined(MQTT_USERNAME) && defined(MQTT_PASSWORD)
@@ -65,6 +66,7 @@ settings_t defaultSettings = {
 #else
     false,
 #endif
+    "",
     0x77
 };
 
@@ -73,13 +75,13 @@ static void readNVS() {
     EEP.get(EEPROM_ADDR, settingsNVS);
     if (settingsNVS.magic == 0x77) {
         memcpy(&settings, &settingsNVS, sizeof(settings_t));
-        Serial.println("Restored system settings from NVS");
+        Serial.println(F("Restored system settings from NVS"));
         Serial.printf("Counter(%d), Offset(", settings.counterTotal);
         Serial.print(settings.counterOffset / 10.0);
         Serial.printf("), Threshold(%d)\n", settings.pulseThreshold);
     } else {
         memcpy(&settings, &defaultSettings, sizeof(settings_t));
-        Serial.println("Initialized NVS with default setttings");
+        Serial.println(F("Initialized NVS with default setttings"));
         saveNVS();
     }
     Serial.printf("Backup settings to NVS every %d minutes\n", settings.backupCycleMin);
@@ -94,7 +96,7 @@ void initNVS() {
 
 // restore default settings
 void resetNVS() {
-    Serial.println("Reset settings to default values");
+    Serial.println(F("Reset settings to default values"));
     memcpy(&settings, &defaultSettings, sizeof(settings_t));
     saveNVS();
 }
@@ -102,7 +104,7 @@ void resetNVS() {
 
 // save current reading to pseudo eeprom
 void saveNVS() {
-    Serial.println("Save settings to NVS");
+    Serial.println(F("Save settings to NVS"));
     EEP.put(EEPROM_ADDR, settings);
     EEP.commit();
 }

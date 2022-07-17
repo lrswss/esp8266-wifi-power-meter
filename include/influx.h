@@ -17,8 +17,6 @@
 #include <Arduino.h>
 #include <WiFiUDP.h>
 
-extern WiFiUDP udp;
-
 void send2influx_udp(uint16_t counter, uint16_t threshold, uint16_t pulse);
 
 #endif

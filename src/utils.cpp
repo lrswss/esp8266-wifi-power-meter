@@ -50,14 +50,16 @@ char* getRuntime(bool noSpaces) {
 
 
 // returns hardware system id (last 3 bytes of mac address)
+// or value set in web ui as 'power meter id'
 // used for MQTT topic
 String systemID() {
     uint8_t mac[6];
-    char sysid[7];
 
-    WiFi.macAddress(mac);
-    sprintf(sysid, "%02X%02X%02X", mac[3], mac[4], mac[5]);
-    return String(sysid);
+    if (strlen(settings.systemID) < 1) {
+        WiFi.macAddress(mac);
+        sprintf(settings.systemID, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+    }
+    return String(settings.systemID);
 }
 
 

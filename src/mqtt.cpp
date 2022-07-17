@@ -29,13 +29,13 @@ static bool mqttConnect() {
     static char clientid[32];
     uint8_t mqtt_error = 0;
 
-    mqtt.setServer(settings.mqttBroker, 1883);
+    mqtt.setServer(settings.mqttBroker, settings.mqttBrokerPort);
     while (!mqtt.connected() && mqtt_error < 3) {
         snprintf(clientid, sizeof(clientid), MQTT_CLIENT_ID, (int)random(0xfffff));
         Serial.printf("Connecting to MQTT Broker %s as %s", settings.mqttBroker, clientid);
         if (settings.mqttEnableAuth)
             Serial.printf(" with username %s", settings.mqttUsername);
-        Serial.print("...");
+        Serial.printf(" on port %d...", settings.mqttBrokerPort);
         if (settings.mqttEnableAuth && mqtt.connect(clientid, settings.mqttUsername, settings.mqttPassword)) {
             Serial.println(F("OK."));
             mqtt_error = 0;

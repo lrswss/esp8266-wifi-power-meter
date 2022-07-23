@@ -433,6 +433,14 @@ function toggleMQTTAuth() {
   }
 }
 
+function toggleMQTTSecure() {
+  if (document.getElementById("checkbox_mqtt_secure").checked == true) {
+    document.getElementById("input_mqttport").value = 8883;
+  } else {
+    document.getElementById("input_mqttport").value = 1883;
+  }
+}
+
 function togglePower() {
   if (document.getElementById("checkbox_power").checked == true) {
     document.getElementById("power").style.display = "block";
@@ -449,9 +457,21 @@ function togglePowerAvg() {
   }
 }
 
+function toggleJSON() {
+  if (document.getElementById("checkbox_mqtt_json").checked == false) {
+    document.getElementById("checkbox_mqtt_ha_discovery").checked = false;
+  }
+}
+
+function toggleHADiscovery() {
+  if (document.getElementById("checkbox_mqtt_ha_discovery").checked == true) {
+    document.getElementById("checkbox_mqtt_json").checked = true;
+  }
+}
+
 </script>
 </head>
-<body onload="configSaved(); togglePower(); toggleMQTT(); toggleMQTTAuth(); togglePowerAvg();">
+<body onload="configSaved(); togglePower(); toggleMQTT(); toggleMQTTAuth(); toggleMQTTSecure(); togglePowerAvg(); toggleJSON(); toggleHADiscovery();">
 <div style="text-align:left;display:inline-block;min-width:340px;">
 <div style="text-align:center;">
 <h2 id="heading">Settings</h2>
@@ -493,7 +513,8 @@ function togglePowerAvg() {
   <input id="input_mqttport" name="mqttport" size="16" maxlength="5" value="__MQTT_PORT__" onkeyup="digitsOnly(this);"></p>
   <p><b>Message topic</b><br />
   <input id="input_mqttbasetopic" name="mqttbasetopic" size="16" maxlength="64" value="__MQTT_BASE_TOPIC__" onkeyup="ASCIIOnly(this);"></p>
-  <p><input id="checkbox_mqtt_json" name="mqtt_json" type="checkbox" __MQTT_JSON__><b>Publish data as JSON</b></p>
+  <p><input id="checkbox_mqtt_json" name="mqtt_json" onclick="toggleJSON();" type="checkbox" __MQTT_JSON__><b>Publish data as JSON</b></p>
+  <p><input id="checkbox_mqtt_ha_discovery" name="mqtt_ha_discovery" onclick="toggleHADiscovery();" type="checkbox" __MQTT_HA_DISCOVERY__><b>Home Assistant Discovery</b></p>
   <p><b>Publishing interval (sec.)</b><br />
   <input name="mqttinterval" value="__MQTT_INTERVAL__" maxlength="4" onkeyup="digitsOnly(this);"></p>
   <p><input id="checkbox_mqttauth" name="mqttauth" onclick="toggleMQTTAuth();" type="checkbox" __MQTT_AUTH__><b>Enable authentication</b></p>
@@ -503,7 +524,8 @@ function togglePowerAvg() {
      <p><b>Password</b><br />
      <input id="input_mqttpassword" type="password" name="mqttpassword" size="16" maxlength="32" value="__MQTT_PASSWORD__"></p>
      </span>
-  </span>
+     <p><input id="checkbox_mqtt_secure" name="mqtt_secure" type="checkbox" onclick="toggleMQTTSecure();" __MQTT_SECURE__><b>Enable TLS</b></p>
+    </span>
   </fieldset>
   <br />
 

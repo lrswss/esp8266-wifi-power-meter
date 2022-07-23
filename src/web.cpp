@@ -194,6 +194,10 @@ void startWebserver() {
             html.replace("__MQTT_JSON__", "checked");
         else
             html.replace("__MQTT_JSON__", "");
+        if (settings.enableHADiscovery)
+            html.replace("__MQTT_HA_DISCOVERY__", "checked");
+        else
+            html.replace("__MQTT_HA_DISCOVERY__", "");
         html.replace("__MQTT_INTERVAL__", String(settings.mqttIntervalSecs));
         if (settings.mqttEnableAuth) 
             html.replace("__MQTT_AUTH__", "checked");
@@ -201,6 +205,10 @@ void startWebserver() {
             html.replace("__MQTT_AUTH__", "");        
         html.replace("__MQTT_USERNAME__", String(settings.mqttUsername));
         html.replace("__MQTT_PASSWORD__", String(settings.mqttPassword));
+        if (settings.mqttSecure)
+            html.replace("__MQTT_SECURE__", "checked");
+        else
+            html.replace("__MQTT_SECURE__", "");
 
         html.replace("__SYSTEMID__", systemID());
         html.replace("__FIRMWARE__", String(FIRMWARE_VERSION));
@@ -251,6 +259,10 @@ void startWebserver() {
                 settings.mqttJSON = true;
             else
                 settings.mqttJSON = false;
+            if (httpServer.arg("mqtt_ha_discovery") == "on")
+                settings.enableHADiscovery = true;
+            else
+                settings.enableHADiscovery = false;
             if (httpServer.arg("mqttauth") == "on") {
                 settings.mqttEnableAuth = true;
                 if (httpServer.arg("mqttuser").length() >= 4 && httpServer.arg("mqttuser").length() <= 31)
@@ -260,7 +272,11 @@ void startWebserver() {
             } else {
                 settings.mqttEnableAuth = false;
             }
-            mqtt.disconnect();
+            if (httpServer.arg("mqtt_secure") == "on")
+                settings.mqttSecure = true;
+            else
+                settings.mqttSecure = false;
+            mqttDisconnect();
         } else {
             settings.enableMQTT = false;
         }

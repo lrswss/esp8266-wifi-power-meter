@@ -17,17 +17,19 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 
-#define MQTT_CLIENT_ID      "PowerMeter_%x"
+#define MQTT_CLIENT_ID      "WifiPowerMeter_%x"
 #define MQTT_SUBTOPIC_CNT   "counter"
 #define MQTT_SUBTOPIC_CONS  "consumption"
 #define MQTT_SUBTOPIC_PWR   "power"
 #define MQTT_SUBTOPIC_RUNT  "runtime"
 #define MQTT_SUBTOPIC_RSSI  "rssi"
 #define MQTT_SUBTOPIC_HEAP  "freeheap"
-
-extern PubSubClient mqtt;
+#define MQTT_TOPIC_DISCOVER "homeassistant/sensor/wifipowermeter-"
 
 void mqttPublish();
+void mqttDisconnect();
 
 #endif

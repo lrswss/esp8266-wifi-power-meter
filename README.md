@@ -132,9 +132,10 @@ alt="settings of the wifi power meter" width="250">&nbsp;&nbsp;&nbsp;<img align=
 src="assets/expert_settings.png" alt="expert settings to tune the detection of
 the red marker" width="250"></p><br>
 
-I'm using MQTT (enabled under `Settings`) to pass the meter readings to [home
-assistant](https://www.home-assistant.io) but the Wifi Power Meter also offers
-support for RESTfult HTTP requests. Readings are available as JSON under
+I'm using MQTT (enabled under `Settings`) to pass the meter readings to [Home
+Assistant](https://www.home-assistant.io) using its [discovery
+function](https://www.home-assistant.io/docs/mqtt/discovery/) but the Wifi Power Meter
+also offers support for RESTful HTTP requests. Readings are available as JSON under
 `http://<IP>/readings`. See `restful.html` as an example.
 
 ## Debug readings with InfluxDB and Grafana

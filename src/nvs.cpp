@@ -61,6 +61,16 @@ settings_t defaultSettings = {
 #else
     false,
 #endif
+#ifdef MQTT_HA_AUTO_DISCOVERY
+    true,
+#else
+    false,
+#endif
+#ifdef MQTT_USE_TLS
+    true,
+#else
+    false,
+#endif
 #ifdef INFLUXDB_ENABLE
     true,
 #else

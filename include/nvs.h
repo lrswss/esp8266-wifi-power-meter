@@ -42,6 +42,8 @@ typedef struct {
     char mqttUsername[33];
     char mqttPassword[33];
     bool mqttJSON;
+    bool enableHADiscovery;
+    bool mqttSecure;
     bool enableInflux;
     char systemID[17];
     uint8_t magic;

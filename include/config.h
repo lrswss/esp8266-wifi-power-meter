@@ -42,9 +42,17 @@
 #define MQTT_BROKER_PORT 1883
 #define MQTT_BASE_TOPIC "__mqtt_topic__"
 #define MQTT_PUBLISH_INTERVAL_SEC 60
+
 // uncomment to enable MQTT authentication
 //#define MQTT_USERNAME "admin"
 //#define MQTT_PASSWORD "secret"
+
+// uncomment to enable encrypted MQTT connection
+// MQTT must have TLS enabled on port 8883
+//#define MQTT_USE_TLS
+
+// uncomment to enable Home Assistant MQTT auto discovery
+//#define MQTT_HA_AUTO_DISCOVERY
 
 // the following settings should be changed with care
 // better use web ui (expert settings) for fine-tuning 
@@ -69,7 +77,23 @@
 // to make Arduino IDE happy
 // version number is set in platformio.ini
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION 213
+#define FIRMWARE_VERSION 220
+#endif
+
+// set default port for MQTT over TLS
+#ifdef MQTT_USE_TLS
+#undef MQTT_BROKER_PORT
+#define MQTT_BROKER_PORT 8883
+#endif
+
+// enable MQTT and JSON if HA discovery is set
+#ifdef MQTT_HA_AUTO_DISCOVERY
+ #ifndef MQTT_ENABLE
+ #define MQTT_ENABLE
+ #endif
+ #ifndef MQTT_PUBLISH_JSON
+ #define MQTT_PUBLISH_JSON
+ #endif
 #endif
 
 #endif

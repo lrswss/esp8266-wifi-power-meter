@@ -219,7 +219,7 @@ void startWebserver() {
 
     // save general settings
     httpServer.on("/config", HTTP_POST, []() {
-        if (httpServer.arg("kwh_turns").toInt() >= 50 && httpServer.arg("kwh_turns").toInt() <= 500)
+        if (httpServer.arg("kwh_turns").toInt() >= 50 && httpServer.arg("kwh_turns").toInt() <= 800)
             settings.turnsPerKwh = httpServer.arg("kwh_turns").toInt();
         if (httpServer.arg("consumption_kwh").toFloat() >= 1 && httpServer.arg("consumption_kwh").toFloat() <= 999999) {
             ferraris.consumption = httpServer.arg("consumption_kwh").toFloat();

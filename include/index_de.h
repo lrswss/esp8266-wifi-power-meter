@@ -363,7 +363,7 @@ function checkInput() {
 
   if (document.getElementById("input_kwh_turns").value.length < 2 ||
     Number(document.getElementById("input_kwh_turns").value) < 50 ||
-    Number(document.getElementById("input_kwh_turns").value) > 500) {
+    Number(document.getElementById("input_kwh_turns").value) > 800) {
     document.getElementById("kwhError").style.display = "block";
     err++;
   }
@@ -488,7 +488,7 @@ function toggleHADiscovery() {
 <div style="max-width:335px;margin-top:10px;">
 <form method="POST" action="/config" onsubmit="return checkInput();">
   <fieldset><legend><b>&nbsp;Ferraris-Zähler&nbsp;</b></legend>
-  <p><b>KWh pro Umdrehung (50-500)</b><br />
+  <p><b>KWh pro Umdrehung (50-800)</b><br />
   <input id="input_kwh_turns" name="kwh_turns" size="16" maxlength="3" value="__TURNS_KWH__" onkeyup="digitsOnly(this);"></p>
   <p><b>Aktueller Zählerstand (KWh)</b><br />
   <input id="input_consumption_kwh" name="consumption_kwh" size="16" maxlength="9" value="__CONSUMPTION_KWH__" onkeyup="floatsOnly(this);"></p>

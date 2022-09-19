@@ -27,9 +27,9 @@ static PubSubClient *mqtt = NULL;
 // published or deletes Home Assistant auto discovery message
 // https://www.home-assistant.io/docs/mqtt/discovery/
 static void publishHADiscoveryMessage(bool publish) {
-    StaticJsonDocument<512> JSON;
+    StaticJsonDocument<256> JSON;
     JsonObject dev;
-    char buf[384], devTopic[96];
+    char buf[448], devTopic[96];
     char topicTotalCon[80], topicPower[80], topicRSSI[80], topicRuntime[80], topicCount[80];
 
     snprintf(devTopic, sizeof(devTopic), "%s/%s", settings.mqttBaseTopic, settings.systemID);
@@ -48,7 +48,7 @@ static void publishHADiscoveryMessage(bool publish) {
         Serial.println(F("Sending home asssistant MQTT auto-discovery message"));
 
         JSON.clear();
-        JSON["name"] = "Ferraris Impuls Counter";
+        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Ferraris Impuls Counter";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-impuls-counter";
         JSON["ic"] = "mdi:counter";
         JSON["stat_t"] = devTopic;
@@ -66,10 +66,11 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "Total Consumption";
+        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Total Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-total-consumption";
         JSON["unit_of_meas"] = "kWh";
         JSON["dev_cla"] = "energy";
+        JSON["stat_cla"] = "total_increasing";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_CONS) +" }}";
         dev = JSON.createNestedObject("dev");
@@ -85,10 +86,11 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "Current Power Consumption";
+        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Current Power Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-current-power";
         JSON["unit_of_meas"] = "W";
         JSON["dev_cla"] = "power";
+        JSON["stat_cla"] = "measurement";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_PWR) +" }}";
         dev = JSON.createNestedObject("dev");
@@ -104,7 +106,7 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "WiFi Signal Strength";
+        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " WiFi Signal Strength";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-rssi";
         JSON["unit_of_meas"] = "dbm";
         JSON["dev_cla"] = "signal_strength";
@@ -123,7 +125,7 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "Uptime";
+        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Uptime";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-uptime";
         JSON["ic"] = "mdi:clock-outline";
         JSON["dev_cla"] = "duration";
@@ -172,7 +174,7 @@ static void mqttInit() {
         mqtt = new PubSubClient(espClient);
     }
     mqtt->setServer(settings.mqttBroker, settings.mqttBrokerPort);
-    mqtt->setBufferSize(448); // for home assistant mqtt auto-discovery
+    mqtt->setBufferSize(480); // for home assistant mqtt auto-discovery
     mqtt->setSocketTimeout(2); // keep web ui responsive
     mqtt->setKeepAlive(settings.mqttIntervalSecs + 10);
 }
@@ -281,9 +283,8 @@ static void publishDataSingle() {
 
 // publish data on base topic as JSON
 static void publishDataJSON() {
-    StaticJsonDocument<192> JSON;
-    static char topicStr[128];
-    char buf[128];
+    StaticJsonDocument<96> JSON;
+    static char topicStr[128], buf[128];
 
     JSON.clear();
     if (mqttConnect()) {

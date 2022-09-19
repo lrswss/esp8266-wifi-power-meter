@@ -27,7 +27,7 @@ static PubSubClient *mqtt = NULL;
 // published or deletes Home Assistant auto discovery message
 // https://www.home-assistant.io/docs/mqtt/discovery/
 static void publishHADiscoveryMessage(bool publish) {
-    StaticJsonDocument<256> JSON;
+    StaticJsonDocument<512> JSON;
     JsonObject dev;
     char buf[448], devTopic[96];
     char topicTotalCon[80], topicPower[80], topicRSSI[80], topicRuntime[80], topicCount[80];
@@ -48,9 +48,9 @@ static void publishHADiscoveryMessage(bool publish) {
         Serial.println(F("Sending home asssistant MQTT auto-discovery message"));
 
         JSON.clear();
-        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Ferraris Impuls Counter";
+        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Ferraris Impuls Counter";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-impuls-counter";
-        JSON["ic"] = "mdi:counter";
+        JSON["ic"] = "mdi:rotate-360";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_CNT) +" }}";
         dev = JSON.createNestedObject("dev");
@@ -66,8 +66,9 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Total Consumption";
+        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Total Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-total-consumption";
+        JSON["ic"] = "mdi:counter";
         JSON["unit_of_meas"] = "kWh";
         JSON["dev_cla"] = "energy";
         JSON["stat_cla"] = "total_increasing";
@@ -86,8 +87,9 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Current Power Consumption";
+        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Current Power Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-current-power";
+        JSON["ic"] = "mdi:lightning-bolt";
         JSON["unit_of_meas"] = "W";
         JSON["dev_cla"] = "power";
         JSON["stat_cla"] = "measurement";
@@ -106,7 +108,7 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " WiFi Signal Strength";
+        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " WiFi Signal Strength";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-rssi";
         JSON["unit_of_meas"] = "dbm";
         JSON["dev_cla"] = "signal_strength";
@@ -125,7 +127,7 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
 
         JSON.clear();
-        JSON["name"] = "Wifi Power Meter " + String(settings.systemID) + " Uptime";
+        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Uptime";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-uptime";
         JSON["ic"] = "mdi:clock-outline";
         JSON["dev_cla"] = "duration";
@@ -283,7 +285,7 @@ static void publishDataSingle() {
 
 // publish data on base topic as JSON
 static void publishDataJSON() {
-    StaticJsonDocument<96> JSON;
+    StaticJsonDocument<160> JSON;
     static char topicStr[128], buf[128];
 
     JSON.clear();

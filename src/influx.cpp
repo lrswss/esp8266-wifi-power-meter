@@ -22,9 +22,9 @@ void send2influx_udp(uint16_t counter, uint16_t threshold, uint16_t pulse) {
     static char measurement[128];
     uint32_t requestTimer = 0;
 
-    // create request with curr2ent/voltage values according to influxdb line protocol
-    // https://docs.influxdata.com/influxdb/v1.7/guides/writing_data/
-    sprintf(measurement, "esp8266_power_meter,device=%s,counter=%d,threshold=%d,pulse=%d\n",
+    // create udp packet containing raw values according to influxdb line protocol
+    // https://docs.influxdata.com/influxdb/v2.4/reference/syntax/line-protocol/
+    sprintf(measurement, "esp8266_power_meter,device=%s counter=%d,threshold=%d,pulse=%d\n",
                 INFLUXDB_DEVICE_TAG, counter, threshold, pulse);
 
     // send udp packet

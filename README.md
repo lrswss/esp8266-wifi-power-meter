@@ -145,6 +145,14 @@ IR sensor to an [InfluxDB](https://www.influxdata.com/products/influxdb-overview
 under `Expert settings`. Contiously visualizing the readings with [Grafana](https://grafana.com/oss/grafana/)
 might help placing the TCRT5000 on your electricity meter to get better readings.
 
+Note that InfluxDB version >=2 requires the Telegraf
+[Socket Listener](https://github.com/influxdata/telegraf/blob/master/plugins/inputs/socket_listener/README.md)
+plugin to process UDP line protocol streams.
+
+<p align="center">
+<img src="assets/influxdb_sensor_data.png" alt="InfluxDB raw sensor data example">
+</p>
+
 ## Contributing
 
 Pull requests are welcome! For major changes, please open an issue first to discuss

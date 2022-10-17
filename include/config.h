@@ -77,7 +77,7 @@
 // to make Arduino IDE happy
 // version number is set in platformio.ini
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION 223
+#define FIRMWARE_VERSION 224
 #endif
 
 // set default port for MQTT over TLS

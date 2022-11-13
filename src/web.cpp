@@ -177,7 +177,7 @@ void startWebserver() {
             html.replace("__CURRENT_POWER__", "checked");
         else
             html.replace("__CURRENT_POWER__", "");
-        if (settings.calculatePowerMvgAvg) 
+        if (settings.calculatePowerMvgAvg && settings.powerAvgSecs > 0)
             html.replace("__POWER_AVG__", "checked");
         else
             html.replace("__POWER_AVG__", "");
@@ -219,6 +219,7 @@ void startWebserver() {
 
     // save general settings
     httpServer.on("/config", HTTP_POST, []() {
+
         if (httpServer.arg("kwh_turns").toInt() >= 50 && httpServer.arg("kwh_turns").toInt() <= 800)
             settings.turnsPerKwh = httpServer.arg("kwh_turns").toInt();
         if (httpServer.arg("consumption_kwh").toFloat() >= 1 && httpServer.arg("consumption_kwh").toFloat() <= 999999) {
@@ -276,11 +277,11 @@ void startWebserver() {
                 settings.mqttSecure = true;
             else
                 settings.mqttSecure = false;
-            mqttDisconnect();
         } else {
             settings.enableMQTT = false;
         }
 
+        mqttDisconnect();
         saveNVS();
         httpServer.sendHeader("Location", "/config?saved", true);
         httpServer.send(302, "text/plain", "");

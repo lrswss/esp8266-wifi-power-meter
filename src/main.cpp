@@ -64,8 +64,9 @@ void loop() {
     static uint32_t previousMeasurementMillis = 0;
     static uint32_t prevLoopTimer = 0;
     static uint32_t busyTime = 0;
+    static uint8_t wifiOfflineCounter = 0;
 
-    // scan ferraris disk for read marker
+    // scan ferraris disk for red marker
     if (tsDiff(previousMeasurementMillis) > settings.readingsIntervalMs) {
         previousMeasurementMillis = millis();
         if (readFerraris()) {
@@ -81,14 +82,22 @@ void loop() {
         busyTime += 1;
 
         // regular MQTT publish interval (if enabled)
+        // try to reconnect to WiFi
         if (settings.enableMQTT && !(busyTime % settings.mqttIntervalSecs))
             mqttPublish();
 
-        // blink LED if WiFi is not available
-        if (!WiFi.isConnected())
+        // blink LED if WiFi is (still) not available
+        // try to reconnect every 30 seconds
+        if (!WiFi.isConnected()) {
             toggleLED();
-        else
+            if (wifiOfflineCounter++ >= 30) {
+                wifiOfflineCounter = 0;
+                wifiReconnectCounter++;
+                WiFi.reconnect();
+            }
+        } else {
             switchLED(false);
+        }
 
         // frequently save counter readings and threshold to EEPROM
         if (!(busyTime % (settings.backupCycleMin * 60)))

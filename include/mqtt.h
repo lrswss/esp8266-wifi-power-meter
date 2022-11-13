@@ -27,6 +27,7 @@
 #define MQTT_SUBTOPIC_RUNT  "runtime"
 #define MQTT_SUBTOPIC_RSSI  "rssi"
 #define MQTT_SUBTOPIC_HEAP  "freeheap"
+#define MQTT_SUBTOPIC_WIFI  "wificounter"
 #define MQTT_TOPIC_DISCOVER "homeassistant/sensor/wifipowermeter-"
 
 void mqttPublish();

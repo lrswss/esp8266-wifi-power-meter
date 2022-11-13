@@ -97,21 +97,16 @@ static void calculateThreshold() {
 // try to find a rising edge in previous analog readings
 static bool findRisingEdge() {
     uint16_t i, belowThresholdTrigger;
-    uint8_t s = 1;
     uint16_t belowTh = 0;
     uint16_t aboveTh = 0;
-
-    // reading interval min. 50ms
-    if (50 / settings.readingsIntervalMs > 1)
-        s = 50 / settings.readingsIntervalMs;
 
     // min. number of pulses below threshold required to detect a rising edge
     belowThresholdTrigger = (settings.pulseDebounceMs / 2) / settings.readingsIntervalMs;
 
     i = ferraris.index > 0 ? ferraris.index : ferraris.size - 1;
-    while (i - s >= 0 && belowTh <= belowThresholdTrigger &&
+    while (i - 1 >= 0 && belowTh <= belowThresholdTrigger &&
                 aboveTh <= settings.aboveThresholdTrigger) {
-        i -= s;
+        i -= 1;
         if (pulseReadings[i] < settings.pulseThreshold)
             belowTh++;
         else
@@ -120,9 +115,9 @@ static bool findRisingEdge() {
 
     // round robin...
     i = ferraris.size;
-    while (i - s > ferraris.index && belowTh <= belowThresholdTrigger && 
+    while (i - 1 > ferraris.index && belowTh <= belowThresholdTrigger &&
                 aboveTh <= settings.aboveThresholdTrigger) {
-        i -= s;
+        i -= 1;
         if (pulseReadings[i] < settings.pulseThreshold)
             belowTh++;
         else

@@ -24,48 +24,96 @@ static WiFiClientSecure espClientSecure;
 static PubSubClient *mqtt = NULL;
 
 
+// publish JSON on given MQTT topic
+static bool publishJSON(JsonDocument& json, char *topic, bool retain, bool verbose) {
+    static char buf[592];
+    bool rc = false;
+    size_t bytes;
+
+    memset(buf, 0, sizeof(buf));
+    bytes = serializeJson(json, buf);
+    if (json.overflowed()) {
+        Serial.printf("MQTT %s aborted, JSON overflow!\n", topic);
+    } else {
+        if (mqtt->publish(topic, buf, retain)) {
+            rc = true;
+            if (verbose)
+                Serial.printf("MQTT %s %s\n", topic, buf);
+            else
+                Serial.printf("MQTT %s (%d bytes)\n", topic, bytes);
+        } else {
+            Serial.printf("MQTT %s failed!\n", topic);
+        }
+    }
+    json.clear();
+    delay(50);
+    return rc;
+}
+
+
+// add device description to HA discovery sensor topic
+static void addDeviceDescription(JsonDocument& json) {
+    JsonObject dev = json.createNestedObject("dev");
+    dev["name"] = "WiFi Power Meter " + String(settings.systemID);
+    dev["ids"] = settings.systemID;
+    dev["cu"] = "http://" + WiFi.localIP().toString();
+    dev["mdl"] = "ESP8266";
+    dev["mf"] = "https://github.com/lrswss";
+    dev["sw"] = FIRMWARE_VERSION;
+}
+
+
 // published or deletes Home Assistant auto discovery message
 // https://www.home-assistant.io/docs/mqtt/discovery/
 static void publishHADiscoveryMessage(bool publish) {
-    StaticJsonDocument<512> JSON;
-    JsonObject dev;
-    char buf[448], devTopic[96];
-    char topicTotalCon[80], topicPower[80], topicRSSI[80], topicRuntime[80], topicCount[80];
+    DynamicJsonDocument JSON(640);
+    static char systemID[17], mqttBaseTopic[65];
+    static bool discoveryPublished = false;
+    char devTopic[96], topicTotalCon[80], topicPower[80], topicRSSI[80];
+    char topicRuntime[80], topicCount[80], topicWifiCnt[96];
 
-    snprintf(devTopic, sizeof(devTopic), "%s/%s", settings.mqttBaseTopic, settings.systemID);
-    snprintf(topicCount, sizeof(topicCount),
-        "%s%s/pulse_count/config", MQTT_TOPIC_DISCOVER, settings.systemID);
-    snprintf(topicTotalCon, sizeof(topicTotalCon),
-        "%s%s/total_consumption/config", MQTT_TOPIC_DISCOVER, settings.systemID);
-    snprintf(topicPower, sizeof(topicPower),
-        "%s%s/current_power/config", MQTT_TOPIC_DISCOVER, settings.systemID);
-    snprintf(topicRSSI, sizeof(topicRSSI),
-        "%s%s/signal_strength/config", MQTT_TOPIC_DISCOVER, settings.systemID);
-    snprintf(topicRuntime, sizeof(topicRuntime),
-        "%s%s/runtime/config", MQTT_TOPIC_DISCOVER, settings.systemID);
+    // message topic didn't change skip HA discovery message
+    if ((discoveryPublished == publish) && !strncmp(systemID, settings.systemID, 64) &&
+            !strncmp(mqttBaseTopic, settings.mqttBaseTopic, 64))
+        return;
 
     if (publish) {
-        Serial.println(F("Sending home asssistant MQTT auto-discovery message"));
+        // if message topic has changed update HA discovery message
+        if ((strlen(systemID) > 0) && (strlen(mqttBaseTopic) > 0) &&
+            ((strncmp(systemID, settings.systemID, 64) != 0) ||
+            (strncmp(mqttBaseTopic, settings.mqttBaseTopic, 64) != 0))) {
+            publishHADiscoveryMessage(false);
+            delay(250);
+        }
+        strncpy(systemID, settings.systemID, 16);
+        strncpy(mqttBaseTopic, settings.mqttBaseTopic, 64);
+    }
 
-        JSON.clear();
+    snprintf(devTopic, sizeof(devTopic), "%s/%s", mqttBaseTopic, systemID);
+    snprintf(topicCount, sizeof(topicCount),
+        "%s%s/pulse_count/config", MQTT_TOPIC_DISCOVER, systemID);
+    snprintf(topicTotalCon, sizeof(topicTotalCon),
+        "%s%s/total_consumption/config", MQTT_TOPIC_DISCOVER, systemID);
+    snprintf(topicPower, sizeof(topicPower),
+        "%s%s/current_power/config", MQTT_TOPIC_DISCOVER, systemID);
+    snprintf(topicRSSI, sizeof(topicRSSI),
+        "%s%s/signal_strength/config", MQTT_TOPIC_DISCOVER, systemID);
+    snprintf(topicWifiCnt, sizeof(topicWifiCnt),
+        "%s%s/wifi_reconnect_counter/config", MQTT_TOPIC_DISCOVER, systemID);
+    snprintf(topicRuntime, sizeof(topicRuntime),
+        "%s%s/runtime/config", MQTT_TOPIC_DISCOVER, systemID);
+
+    if (publish) {
+        Serial.printf("Sending Home Asssistant MQTT discovery message for %s...\n", devTopic);
+
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Ferraris Impuls Counter";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-impuls-counter";
         JSON["ic"] = "mdi:rotate-360";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_CNT) +" }}";
-        dev = JSON.createNestedObject("dev");
-        dev["name"] = "WiFi Power Meter " + String(settings.systemID);
-        dev["ids"] = settings.systemID;
-        dev["cu"] = "http://" + WiFi.localIP().toString();
-        dev["mdl"] = "ESP8266";
-        dev["mf"] = "https://github.com/lrswss";
-        dev["sw"] = FIRMWARE_VERSION;
-        serializeJson(JSON, buf);
-        dev.clear();
-        mqtt->publish(topicCount, buf, true);
-        delay(50);
+        addDeviceDescription(JSON);
+        publishJSON(JSON, topicCount, true, false);
 
-        JSON.clear();
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Total Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-total-consumption";
         JSON["ic"] = "mdi:counter";
@@ -74,19 +122,9 @@ static void publishHADiscoveryMessage(bool publish) {
         JSON["stat_cla"] = "total_increasing";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_CONS) +" }}";
-        dev = JSON.createNestedObject("dev");
-        dev["name"] = "WiFi Power Meter " + String(settings.systemID);
-        dev["ids"] = settings.systemID;
-        dev["cu"] = "http://" + WiFi.localIP().toString();
-        dev["mdl"] = "ESP8266";
-        dev["mf"] = "https://github.com/lrswss";
-        dev["sw"] = FIRMWARE_VERSION;
-        serializeJson(JSON, buf);
-        dev.clear();
-        mqtt->publish(topicTotalCon, buf, true);
-        delay(50);
+        addDeviceDescription(JSON);
+        publishJSON(JSON, topicTotalCon, true, false);
 
-        JSON.clear();
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Current Power Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-current-power";
         JSON["ic"] = "mdi:lightning-bolt";
@@ -95,59 +133,39 @@ static void publishHADiscoveryMessage(bool publish) {
         JSON["stat_cla"] = "measurement";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_PWR) +" }}";
-        dev = JSON.createNestedObject("dev");
-        dev["name"] = "WiFi Power Meter " + String(settings.systemID);
-        dev["ids"] = settings.systemID;
-        dev["cu"] = "http://" + WiFi.localIP().toString();
-        dev["mdl"] = "ESP8266";
-        dev["mf"] = "https://github.com/lrswss";
-        dev["sw"] = FIRMWARE_VERSION;
-        serializeJson(JSON, buf);
-        dev.clear();
-        mqtt->publish(topicPower, buf, true);
-        delay(50);
+        addDeviceDescription(JSON);
+        publishJSON(JSON, topicPower, true, false);
 
-        JSON.clear();
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " WiFi Signal Strength";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-rssi";
         JSON["unit_of_meas"] = "dbm";
         JSON["dev_cla"] = "signal_strength";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_RSSI) +" }}";
-        dev = JSON.createNestedObject("dev");
-        dev["name"] = "WiFi Power Meter " + String(settings.systemID);
-        dev["ids"] = settings.systemID;
-        dev["cu"] = "http://" + WiFi.localIP().toString();
-        dev["mdl"] = "ESP8266";
-        dev["mf"] = "https://github.com/lrswss";
-        dev["sw"] = FIRMWARE_VERSION;
-        serializeJson(JSON, buf);
-        dev.clear();
-        mqtt->publish(topicRSSI, buf, true);
-        delay(50);
+        addDeviceDescription(JSON);
+        publishJSON(JSON, topicRSSI, true, false);
 
-        JSON.clear();
+        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " WiFi Reconnect Counter";
+        JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-wifi-reconnect-counter";
+        JSON["ic"] = "mdi:wifi-alert";
+        JSON["stat_t"] = devTopic;
+        JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_WIFI) +" }}";
+        addDeviceDescription(JSON);
+        publishJSON(JSON, topicWifiCnt, true, false);
+
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Uptime";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-uptime";
         JSON["ic"] = "mdi:clock-outline";
         JSON["dev_cla"] = "duration";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_RUNT) +" }}";
-        dev = JSON.createNestedObject("dev");
-        dev["name"] = "WiFi Power Meter " + String(settings.systemID);
-        dev["ids"] = settings.systemID;
-        dev["cu"] = "http://" + WiFi.localIP().toString();
-        dev["mdl"] = "ESP8266";
-        dev["mf"] = "https://github.com/lrswss";
-        dev["sw"] = FIRMWARE_VERSION;
-        serializeJson(JSON, buf);
-        dev.clear();
-        mqtt->publish(topicRuntime, buf, true);
-        JSON.clear();
+        addDeviceDescription(JSON);
+        publishJSON(JSON, topicRuntime, true, false);
+        discoveryPublished = true;
 
-    } else {
+    } else if (strlen(devTopic) > 1) {
         // send empty (retained) message to delete sensor autoconfiguration
-        Serial.println(F("Removing home asssistant MQTT auto-discovery message"));
+        Serial.printf("Removing Home Asssistant MQTT discovery message for %s...\n", devTopic);
 
         mqtt->publish(topicCount, "", true);
         delay(50);
@@ -157,7 +175,12 @@ static void publishHADiscoveryMessage(bool publish) {
         delay(50);
         mqtt->publish(topicRSSI, "", true);
         delay(50);
+        mqtt->publish(topicWifiCnt, "", true);
+        delay(50);
         mqtt->publish(topicRuntime, "", true);
+
+        memset(devTopic, 0, sizeof(devTopic));
+        discoveryPublished = false;
     }
 }
 
@@ -169,14 +192,14 @@ static void mqttInit() {
     if (settings.mqttSecure) {
         espClientSecure.setInsecure();
         // must reduce memory usage with Maximum Fragment Length Negotiation (supported by mosquitto)
-        espClientSecure.probeMaxFragmentLength(settings.mqttBroker, settings.mqttBrokerPort, 512);
-        espClientSecure.setBufferSizes(512, 512);
+        espClientSecure.probeMaxFragmentLength(settings.mqttBroker, settings.mqttBrokerPort, 1024);
+        espClientSecure.setBufferSizes(1024, 1024);
         mqtt = new PubSubClient(espClientSecure);
     } else {
         mqtt = new PubSubClient(espClient);
     }
     mqtt->setServer(settings.mqttBroker, settings.mqttBrokerPort);
-    mqtt->setBufferSize(480); // for home assistant mqtt auto-discovery
+    mqtt->setBufferSize(672); // for home assistant MQTT device discovery
     mqtt->setSocketTimeout(2); // keep web ui responsive
     mqtt->setKeepAlive(settings.mqttIntervalSecs + 10);
 }
@@ -188,13 +211,20 @@ static bool mqttConnect() {
     static char clientid[32];
     uint8_t mqtt_error = 0;
 
+    if (!WiFi.isConnected()) {
+        Serial.printf("WiFi not available, cannot connect to MQTT broker %s\n", settings.mqttBroker);
+        return false;
+    }
+
     mqttInit();
-    if (mqtt->connected())
+    if (mqtt->connected()) {
+        publishHADiscoveryMessage(settings.enableHADiscovery);
         return true;
+    }
 
     while (!mqtt->connected() && mqtt_error < 3) {
         snprintf(clientid, sizeof(clientid), MQTT_CLIENT_ID, (int)random(0xfffff));
-        Serial.printf("Connecting to MQTT Broker %s as %s", settings.mqttBroker, clientid);
+        Serial.printf("Connecting to MQTT broker %s as %s", settings.mqttBroker, clientid);
         if (settings.mqttEnableAuth)
             Serial.printf(" with username %s", settings.mqttUsername);
         Serial.printf(" on port %d%s...", settings.mqttBrokerPort, settings.mqttSecure ? " (TLS)" : "");
@@ -233,51 +263,74 @@ static void publishDataSingle() {
         setMessage("publishData", 3);
         snprintf(topicStr, sizeof(topicStr), "%s/%s/%s", 
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_CNT);
-        Serial.printf("MQTT %s %d\n", topicStr, settings.counterTotal);
-        mqtt->publish(topicStr, String(settings.counterTotal).c_str(), true);
+        if (mqtt->publish(topicStr, String(settings.counterTotal).c_str(), false))
+            Serial.printf("MQTT %s %d\n", topicStr, settings.counterTotal);
+        else
+            Serial.printf("MQTT %s failed!\n", topicStr);
         delay(50);
 
         // need counter offset to publish total consumption (kwh)
         if (ferraris.consumption > 0) {
             snprintf(topicStr, sizeof(topicStr), "%s/%s/%s", 
                 settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_CONS);
-            Serial.printf("MQTT %s ", topicStr);
-            Serial.println(ferraris.consumption, 2); // float!
-            mqtt->publish(topicStr, String(ferraris.consumption, 2).c_str(), true);
+            if (mqtt->publish(topicStr, String(ferraris.consumption, 2).c_str(), false)) {
+                Serial.printf("MQTT %s ", topicStr);
+                Serial.println(ferraris.consumption, 2); // float!
+            } else {
+                Serial.printf("MQTT %s failed!\n", topicStr);
+            }
             delay(50);
         }
 
         if (ferraris.power > -1) {
             snprintf(topicStr, sizeof(topicStr), "%s/%s/%s",
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_PWR);
-            Serial.printf("MQTT %s %d\n", topicStr, ferraris.power);
-            mqtt->publish(topicStr, String(ferraris.power).c_str(), true);
+            if (mqtt->publish(topicStr, String(ferraris.power).c_str(), false))
+                Serial.printf("MQTT %s %d\n", topicStr, ferraris.power);
+            else
+                Serial.printf("MQTT %s failed!\n", topicStr);
             delay(50);
         }
 
         snprintf(topicStr, sizeof(topicStr), "%s/%s/%s",
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_RUNT);
-        Serial.printf("MQTT %s %s\n", topicStr, getRuntime(true));
-        mqtt->publish(topicStr, getRuntime(true), true);
+        if (mqtt->publish(topicStr, getRuntime(true), true))
+            Serial.printf("MQTT %s %s\n", topicStr, getRuntime(true));
+        else
+            Serial.printf("MQTT %s failed!\n", topicStr);
         delay(50);
 
         snprintf(topicStr, sizeof(topicStr), "%s/%s/%s", 
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_RSSI);
-        Serial.printf("MQTT %s %d\n", topicStr, WiFi.RSSI());
-        mqtt->publish(topicStr, String(WiFi.RSSI()).c_str(), true);
+        if (mqtt->publish(topicStr, String(WiFi.RSSI()).c_str(), false))
+            Serial.printf("MQTT %s %d\n", topicStr, WiFi.RSSI());
+        else
+            Serial.printf("MQTT %s failed!\n", topicStr);
+        delay(50);
+
+        snprintf(topicStr, sizeof(topicStr), "%s/%s/%s",
+            settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_WIFI);
+        if (mqtt->publish(topicStr, String(wifiReconnectCounter).c_str(), false))
+            Serial.printf("MQTT %s %d\n", topicStr, wifiReconnectCounter);
+        else
+            Serial.printf("MQTT %s failed!\n", topicStr);
         delay(50);
 
         snprintf(topicStr, sizeof(topicStr), "%s/%s/version",
             settings.mqttBaseTopic, systemID().c_str());
-        Serial.printf("MQTT %s %d\n", topicStr, FIRMWARE_VERSION);
-        mqtt->publish(topicStr, String(FIRMWARE_VERSION).c_str(), true);
+        if (mqtt->publish(topicStr, String(FIRMWARE_VERSION).c_str(), false))
+            Serial.printf("MQTT %s %d\n", topicStr, FIRMWARE_VERSION);
+        else
+            Serial.printf("MQTT %s failed!\n", topicStr);
         delay(50);
 
 #ifdef DEBUG_HEAP
         snprintf(topicStr, sizeof(topicStr), "%s/%s/%s",
             settings.mqttBroker, systemID().c_str(), MQTT_SUBTOPIC_HEAP);
-        Serial.printf("%s %d\n", topicStr, ESP.getFreeHeap());
-        mqtt->publish(topicStr, String(ESP.getFreeHeap()).c_str(), true);
+        if (mqtt->publish(topicStr, String(ESP.getFreeHeap()).c_str(), false))
+            Serial.printf("%s %d\n", topicStr, ESP.getFreeHeap());
+        else
+            Serial.printf("MQTT %s failed!\n", topicStr);
 #endif
     }
 }
@@ -286,7 +339,7 @@ static void publishDataSingle() {
 // publish data on base topic as JSON
 static void publishDataJSON() {
     StaticJsonDocument<160> JSON;
-    static char topicStr[128], buf[128];
+    static char topicStr[128];
 
     JSON.clear();
     if (mqttConnect()) {
@@ -297,16 +350,14 @@ static void publishDataJSON() {
         if (ferraris.power > -1)
             JSON[MQTT_SUBTOPIC_PWR] = ferraris.power;
         JSON[MQTT_SUBTOPIC_RUNT] = getRuntime(true);
+        JSON[MQTT_SUBTOPIC_WIFI] = wifiReconnectCounter;
         JSON[MQTT_SUBTOPIC_RSSI] = WiFi.RSSI();
         JSON["version"] = FIRMWARE_VERSION;
 #ifdef DEBUG_HEAP
         JSON[MQTT_SUBTOPIC_HEAP] = ESP.getFreeHeap();
 #endif
-        memset(buf, 0, sizeof(buf));
-        size_t s = serializeJson(JSON, buf);
         snprintf(topicStr, sizeof(topicStr), "%s/%s", settings.mqttBaseTopic, systemID().c_str());
-        Serial.printf("MQTT %s %s\n", topicStr, buf);
-        mqtt->publish(topicStr, buf, s);
+        publishJSON(JSON, topicStr, false, true);
     }
 }
 

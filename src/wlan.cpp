@@ -16,6 +16,7 @@
 #include "utils.h"
 
 WiFiManager wm;
+uint16_t wifiReconnectCounter = 0;
 
 // connect to local WiFi or automatically start access 
 // point with WiFiManager if not yet configured

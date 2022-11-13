@@ -76,7 +76,11 @@ settings_t defaultSettings = {
 #else
     false,
 #endif
+#ifdef SYSTEM_ID
+    SYSTEM_ID,
+#else
     "",
+#endif
     0x77
 };
 

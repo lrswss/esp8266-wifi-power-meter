@@ -18,6 +18,7 @@
 #include <WiFiManager.h>
 
 extern WiFiManager wm;
+extern uint16_t wifiReconnectCounter;
 
 #define WIFI_AP_SSID "WifiPowerMeter"
 #define WIFI_MIN_RSSI 25

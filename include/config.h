@@ -54,11 +54,15 @@
 // uncomment to enable Home Assistant MQTT auto discovery
 //#define MQTT_HA_AUTO_DISCOVERY
 
+// optional preset power meter's id (max. 16 characters)
+// defaults to last 3 octets of ESP8266's MAC address
+//#define SYSTEM_ID "12345678"
+
 // the following settings should be changed with care
 // better use web ui (expert settings) for fine-tuning 
 #define READINGS_BUFFER_SEC 90
 #define READINGS_INTERVAL_MS 25
-#define READINGS_SPREAD_MIN 4
+#define READINGS_SPREAD_MIN 3
 #define ABOVE_THRESHOLD_TRIGGER 3
 #define PULSE_DEBOUNCE_MS 2000
 #define BACKUP_CYCLE_MIN 60
@@ -77,7 +81,7 @@
 // to make Arduino IDE happy
 // version number is set in platformio.ini
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION 224
+#define FIRMWARE_VERSION 230
 #endif
 
 // set default port for MQTT over TLS

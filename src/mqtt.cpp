@@ -104,7 +104,7 @@ static void publishHADiscoveryMessage(bool publish) {
         "%s%s/runtime/config", MQTT_TOPIC_DISCOVER, systemID);
 
     if (publish) {
-        Serial.printf("Sending Home Asssistant MQTT discovery message for %s...\n", devTopic);
+        Serial.printf("Sending Home Assistant MQTT discovery message for %s...\n", devTopic);
 
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Ferraris Impuls Counter";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-impuls-counter";
@@ -166,7 +166,7 @@ static void publishHADiscoveryMessage(bool publish) {
 
     } else if (strlen(devTopic) > 1) {
         // send empty (retained) message to delete sensor autoconfiguration
-        Serial.printf("Removing Home Asssistant MQTT discovery message for %s...\n", devTopic);
+        Serial.printf("Removing Home Assistant MQTT discovery message for %s...\n", devTopic);
 
         mqtt->publish(topicCount, "", true);
         delay(50);

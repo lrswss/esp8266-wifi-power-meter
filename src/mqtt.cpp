@@ -104,7 +104,7 @@ static void publishHADiscoveryMessage(bool publish) {
         "%s%s/runtime/config", MQTT_TOPIC_DISCOVER, systemID);
 
     if (publish) {
-        Serial.printf("Sending Home Asssistant MQTT discovery message for %s...\n", devTopic);
+        Serial.printf("Sending Home Assistant MQTT discovery message for %s...\n", devTopic);
 
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Ferraris Impuls Counter";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-impuls-counter";
@@ -138,7 +138,7 @@ static void publishHADiscoveryMessage(bool publish) {
 
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " WiFi Signal Strength";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-rssi";
-        JSON["unit_of_meas"] = "dbm";
+        JSON["unit_of_meas"] = "dBm";
         JSON["dev_cla"] = "signal_strength";
         JSON["stat_t"] = devTopic;
         JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_RSSI) +" }}";
@@ -155,6 +155,7 @@ static void publishHADiscoveryMessage(bool publish) {
 
         JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Uptime";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-uptime";
+        JSON["unit_of_meas"] = "d";
         JSON["ic"] = "mdi:clock-outline";
         JSON["dev_cla"] = "duration";
         JSON["stat_t"] = devTopic;
@@ -165,7 +166,7 @@ static void publishHADiscoveryMessage(bool publish) {
 
     } else if (strlen(devTopic) > 1) {
         // send empty (retained) message to delete sensor autoconfiguration
-        Serial.printf("Removing Home Asssistant MQTT discovery message for %s...\n", devTopic);
+        Serial.printf("Removing Home Assistant MQTT discovery message for %s...\n", devTopic);
 
         mqtt->publish(topicCount, "", true);
         delay(50);

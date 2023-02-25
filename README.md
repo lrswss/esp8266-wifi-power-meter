@@ -5,7 +5,7 @@
 <p align="center"><img src="assets/ferraris_meter.png" alt="Wemos D1 mini
 with TCRT5000 IR sensor mounted on ferraris electricity meter"></p><br>
 
-Using the analog output of an IR sensor, the revolutions of a Ferraris
+Using the analog output of an IR sensor, the rotation of a Ferraris
 electricity meter are detected. The total meter reading (KWh) and current
 consumption (Watt) are displayed on an embedded web page and optionally published
 via MQTT. As visual feedback the blue LED on the Wemos D1 mini board blinks if
@@ -55,7 +55,7 @@ To build and upload the firmware via USB to your Wemos D1 mini or NodeMCU just
 click on the right arrow in the blue bar on the bottom of VSC. All necessary libraries
 (see `platformio.ini`) will be downloaded automatically. Eventually you'll see
 the upload starting in a terminal window. If it fails you probably need to adjust
-the settings for `port` in `plattformi.ini`. The project was developed on a MacOS
+the settings for `port` in `plattformi.ini`. The project was developed on MacOS
 which uses UNIX style devices names. On Windows you need to specify a `COM` port.
 
 To compile and install the firmware with the Arduino IDE, you have to
@@ -93,7 +93,7 @@ can be powered with a small USB power supply (5V, around 250mA).
 
 After the first power-up, the [WifiManager](https://github.com/tzapu/WiFiManager)
 will create the access point `WifiPowerMeter-XXXXXX` (with no password) to connect
-the Wemos D1 to your local WiFi network. If you've set your WiFi credentials
+the Wemos D1 to your local WiFi network. If you have set your WiFi credentials
 the ESP8266 will received an IP via DHCP (check serial debug message or your router).
 Point your favourite browser to the IP. If you can establish a connection to the
 embebbed web server, you can proceed mounting the sensor and the controller board
@@ -106,24 +106,28 @@ comes in handy. Thingiverse offers quite a few options like
 [this one](https://www.thingiverse.com/thing:2668168).
 
 Since the firmware also supports OTA updates, you only need to flash your ESP8266
-once before mounting in your meter cabinet.
+once before mounting it in your meter cabinet. Please note that all settings might
+be reset to their default values if the structure of the system settings stored in
+ESP8266's flash changes with a new firmware. To avoid having to start from scratch
+after a firmware update, **all system settings can be exported to a JSON file**,
+which you can upload after an update to restore your configuration.
 
 ## Setting the threshold to detect the red marker
 
 Make sure that during the initial calibration phase (default 90 secs.), which is
 triggered by `Calculate Threshold`, the ferraris disk is actually spinning fast
 enough. The calculation of the IR sensor pulse threshold should be based on
-at least two full revolutions with the red marker passing the IR sensor twice.
+at least two full rotations with the red marker passing the IR sensor twice.
 Turning on your oven or water kettle should help to speed up things. ;-)
 
 After the initial and hopefully successful calibration cycle, you only have to
-save the calculated threshold value with `Save Threshold` to switch the Wifi
+save the calculated threshold value with `Save Threshold` to switch the WiFi
 Power Meter to normal operation. You can tune the threshold value and other
 parameters under `Expert settings`, but you should be OK with the default settings.
 
-In a last configuration step you have to set `Turns per KWh` under `Settings`
+In a last configuration step you have to set `Rotations per kWh` under `Settings`
 to the value of the Ferraris meter (the default value is 75) and sync the
-current KWh reading of the meter with the setting `Current Consumption` of
+current kWh reading of the meter with the setting `Current Consumption` of
 the Wifi Power Meter.
 
 <br><p align="center"><img align="top" src="assets/main_page.png" alt="main page of
@@ -132,11 +136,36 @@ alt="settings of the wifi power meter" width="250">&nbsp;&nbsp;&nbsp;<img align=
 src="assets/expert_settings.png" alt="expert settings to tune the detection of
 the red marker" width="250"></p><br>
 
+## Receive meter readings via MQTT or RESTful
+
 I'm using MQTT (enabled under `Settings`) to pass the meter readings to [Home
 Assistant](https://www.home-assistant.io) using its [discovery
-function](https://www.home-assistant.io/docs/mqtt/discovery/) but the Wifi Power Meter
-also offers support for RESTful HTTP requests. Readings are available as JSON under
-`http://<IP>/readings`. See `restful.html` as an example.
+function](https://www.home-assistant.io/docs/mqtt/discovery/). Sensor readings
+are published to single topics or as JSON at `<maintopic>/<sensorid>/state`.
+The address of the MQTT Broker, publishing interval, optional TLS encryption,
+`maintopic` and `sensorid` can be configured under `Settings`.
+
+The Wifi Power Meter also offers support for RESTful HTTP requests. Readings are
+available as JSON under `http://<IP>/readings`. See `restful.html` as an example.
+
+## Power Saving Mode (experimental)
+
+If you have enabled `MQTT` and `Power Saving Mode` under `Settings`, the Wifi
+Power Meter will turn off WiFi between MQTT messages. This reduces the current
+consumption from 95mA to about 35mA (20mA ESP8266 and 15mA TCRT5000) which
+might be low enough to run the device from a single 18650 cell for a few days.
+The `Power Saving Mode` is experimental and was not tested over long period of
+time. When the ESP8266 reconnects to your WiFi network, which takes a few seconds,
+the IR sensor may miss the red marker resulting in slight errors in the total
+consumption readings.
+
+Please note that the web interface will be inaccessible after 5 minutes and
+thereafter if `Power Saving Mode` was enabled. The Wemos D1's blue LED
+will flash every 5 seconds. To regain access to the web interface you will need
+to power down the Wifi Power Meter or send the retained MQTT message `0` to
+`<maintopic>/<sensorid>/cmd/powersave`. The MQTT publish interval which also
+determines the time for intermediate WiFi wakeups can be configured (in seconds) 
+using the topic `<maintopic>/<sensorid>/cmd/mqttinterval`.
 
 ## Debug readings with InfluxDB and Grafana
 
@@ -160,6 +189,6 @@ what you would like to change.
 
 ## License
 
-Copyright (c) 2019-2022 Lars Wessels  
+Copyright (c) 2019-2023 Lars Wessels  
 This software was published under the MIT license.  
 Please check the [license file](LICENSE).

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<meta name="author" content="(c) 2021-2022 Lars Wessels">
+<meta name="author" content="(c) 2021-2023 Lars Wessels">
 <title>RESTful</title>
 <style>
 body{padding:5px 0px 0px 20px;font-family:sans-serif;}
@@ -26,6 +26,7 @@ function getReadings() {
 			document.getElementById("consumption").innerHTML = json.totalConsumption;
 			document.getElementById("power").innerHTML = json.currentPower;
 			document.getElementById("runtime").innerHTML = json.runtime;
+            document.getElementById("rssi").innerHTML = json.rssi;
 		}
 	}
 	xhttp.open("GET", "http://" + document.getElementById("ip").value + "/readings", true);
@@ -34,7 +35,7 @@ function getReadings() {
 </script>
 <body onload="setInterval(function() { getReadings(); }, 2000);">
 <div id="ampel">
-<h1>Ferraris Powermeter</h1>
+<h1>Wifi Power Meter</h1>
 <p><form onsubmit="return false;"><span style="color:red;">Enter IP-Address:</span>
 	<input id="ip" type="text" size="18"></form>
 </p>
@@ -43,6 +44,8 @@ function getReadings() {
 <p><span id="labels">TotalConsumption:</span><span id="consumption">---</span> kWh</p>
 <p><span id="labels">CurrentConsumption:</span><span id="power">---</span> Watt</p>
 <p><span id="labels">Runtime:</span><span id="runtime">--d --h --m</span></p>
+<p><span id="labels">RSSI:</span><span id="rssi">--</span> dBm</p>
+
 </div>
 </div>
 </body>

@@ -1,5 +1,5 @@
 /***************************************************************************
-  Copyright (c) 2019-2022 Lars Wessels
+  Copyright (c) 2019-2023 Lars Wessels
 
   This file a part of the "ESP8266 Wifi Power Meter" source code.
   https://github.com/lrswss/esp8266-wifi-power-meter
@@ -23,9 +23,9 @@
 #include "index_de.h" // HTML-Page (german)
 #endif
 
-extern ESP8266WebServer httpServer;
-
 void startWebserver();
+void stopWebserver();
+void handleWebrequest();
 void setMessage(const char *msg, uint8_t secs);
 
 #endif

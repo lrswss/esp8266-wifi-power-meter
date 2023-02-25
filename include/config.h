@@ -1,6 +1,6 @@
 
 /***************************************************************************
-  Copyright (c) 2019-2022 Lars Wessels
+  Copyright (c) 2019-2023 Lars Wessels
 
   This file a part of the "ESP8266 Wifi Power Meter" source code.
   https://github.com/lrswss/esp8266-wifi-power-meter
@@ -33,7 +33,7 @@
 
 // optionally apply a moving average to power consumption calculations
 // interval used for average calculation, set to 0 to disable
-#define POWER_AVG_SECS 60
+#define POWER_AVG_SECS 120
 
 // publish power meter readings via MQTT (optional)
 //#define MQTT_ENABLE
@@ -54,8 +54,20 @@
 // uncomment to enable Home Assistant MQTT auto discovery
 //#define MQTT_HA_AUTO_DISCOVERY
 
-// optional preset power meter's id (max. 16 characters)
+// switch off Wifi inbetween MQTT messages (95mA -> 35mA)
+// If enabled, you cannot set the MQTT publish interval below
+// MQTT_INTERVAL_MIN_POWERSAVING_SECS (see mqtt.h).
+// Since Wifi is switched on only for 2 seconds to publish meter
+// readings the web ui will be inaccessible. To regain access to
+// the web ui you need to power down the Wifi power meter or publish
+// a MQTT message to (cmd/powersave 0) to disable power saving mode
+// internal web server will run for 5 min. before switching back
+// to power saving mode unless you disable the option under settings
+//#define POWER_SAVING_MODE
+
+// optional preset power meter's id (e.g. number of ferraris meter)
 // defaults to last 3 octets of ESP8266's MAC address
+// (string with max. 16 characters)
 //#define SYSTEM_ID "12345678"
 
 // the following settings should be changed with care
@@ -81,7 +93,7 @@
 // to make Arduino IDE happy
 // version number is set in platformio.ini
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION 231
+#define FIRMWARE_VERSION 240
 #endif
 
 // set default port for MQTT over TLS
@@ -98,6 +110,10 @@
  #ifndef MQTT_PUBLISH_JSON
  #define MQTT_PUBLISH_JSON
  #endif
+#endif
+
+#ifndef MQTT_ENABLE
+ #undef POWER_SAVING_MODE
 #endif
 
 #endif

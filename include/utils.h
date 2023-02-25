@@ -1,5 +1,5 @@
 /***************************************************************************
-  Copyright (c) 2019-2022 Lars Wessels
+  Copyright (c) 2019-2023 Lars Wessels
 
   This file a part of the "ESP8266 Wifi Power Meter" source code.
   https://github.com/lrswss/esp8266-wifi-power-meter
@@ -20,7 +20,7 @@
 
 String systemID();
 int32_t tsDiff(uint32_t tsMillis);
-char* getRuntime(bool noSpaces);
+char* getRuntime(bool minutesOnly);
 void blinkLED(uint8_t repeat, uint16_t pause);
 void restartSystem();
 void toggleLED();

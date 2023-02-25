@@ -1,5 +1,5 @@
 /***************************************************************************
-  Copyright (c) 2019-2022 Lars Wessels
+  Copyright (c) 2019-2023 Lars Wessels
 
   This file a part of the "ESP8266 Wifi Power Meter" source code.
   https://github.com/lrswss/esp8266-wifi-power-meter
@@ -17,6 +17,7 @@
 #include "utils.h"
 #include "influx.h"
 #include "nvs.h"
+#include "wlan.h"
 
 
 static int16_t *pulseReadings;
@@ -33,6 +34,26 @@ static int sortAsc(const void *val1, const void *val2) {
 }
 
 
+// determine average pulse reading in the past 'count' number of ADC readings
+static uint16_t findPastAverage(uint16_t count) {
+    uint32_t average = 0, index = count;
+
+    for (uint16_t i = ferraris.index; i > 0; i--) {
+        average += pulseReadings[i];
+        if (--index == 0)
+            break;
+    }
+    if (index > 0) {
+        for (uint16_t i = ferraris.size-1; i > ferraris.index; i--) {
+            average += pulseReadings[i];
+            if (--index == 0)
+                break;
+        }
+    }
+    return ((average + (count / 2)) / count);
+}
+
+
 // reset sensor readings
 static void resetReadings() {
     memset(pulseReadings, 0, ferraris.size * sizeof(int16_t));
@@ -43,23 +64,24 @@ static void resetReadings() {
     ferraris.spread = 0;
     ferraris.max = 0;
     ferraris.min = 0;
+    ferraris.offsetNoWifi = 0;
 }
 
 
-// read an averaged value from the TCRT5000 IR sensor
+// read an averaged value from the TCRT5000 IR sensor (5ms)
 static int16_t readIRSensor() {
-    int16_t pulseReading;  // 0-1024
+    int16_t pulseReading;  // 0-1023
     int16_t sumReadings = 0;
 
-    // average over 10 readings
-    for (uint8_t i = 0; i < 10; i++) { 
-        sumReadings += analogRead(A0);
-        delayMicroseconds(200);
+    for (uint8_t i = 0; i < 10; i++) { // average over 10 readings
+        sumReadings += analogRead(A0); // about 100us
+        delayMicroseconds(400);
     }
     pulseReading = int(sumReadings/10);
 
     if (settings.enableInflux)
-        send2influx_udp(settings.counterTotal, settings.pulseThreshold, pulseReading);
+        send2influx_udp(settings.counterTotal,
+            (settings.pulseThreshold + ferraris.offsetNoWifi), pulseReading);
     return pulseReading;
 }
 
@@ -71,7 +93,7 @@ static void calculateThreshold() {
     // sort array with analog readings
     qsort(pulseReadings, ferraris.size, sizeof(pulseReadings[0]), sortAsc);
 
-    // min, max and slightly corrected spread of all readings
+    // min, max and slightly corrected spreadw of all readings
     ferraris.min = pulseReadings[0];
     ferraris.max = pulseReadings[ferraris.size - 1];
     ferraris.spread = pulseReadings[(int)(ferraris.size * 0.99)] - pulseReadings[(int)(ferraris.size * 0.01)];
@@ -79,7 +101,7 @@ static void calculateThreshold() {
     if (ferraris.spread >= settings.readingsSpreadMin) {
         // My Ferraris disk has a diameter of approx. 9cm => circumference about 28.3cm
         // Length of marker on the disk is more or less 1cm => fraction of circumference about 1/30 => 3%
-        // Thus after at least(!) one full revolution of the ferraris disk all analog sensor
+        // Thus after at least(!) one full rotation of the ferraris disk all analog sensor
         // readings above the 97% percentile should qualify as a suitable threshold values
         settings.pulseThreshold = pulseReadings[(int)(ferraris.size * 0.98)];
         Serial.println(F("Calculation of new threshold for red marker succeeded."));
@@ -107,7 +129,7 @@ static bool findRisingEdge() {
     while (i - 1 >= 0 && belowTh <= belowThresholdTrigger &&
                 aboveTh <= settings.aboveThresholdTrigger) {
         i -= 1;
-        if (pulseReadings[i] < settings.pulseThreshold)
+        if (pulseReadings[i] < (settings.pulseThreshold + ferraris.offsetNoWifi))
             belowTh++;
         else
             aboveTh++;
@@ -118,7 +140,7 @@ static bool findRisingEdge() {
     while (i - 1 > ferraris.index && belowTh <= belowThresholdTrigger &&
                 aboveTh <= settings.aboveThresholdTrigger) {
         i -= 1;
-        if (pulseReadings[i] < settings.pulseThreshold)
+        if (pulseReadings[i] < (settings.pulseThreshold + ferraris.offsetNoWifi))
             belowTh++;
         else
             aboveTh++;
@@ -141,7 +163,7 @@ static int16_t calculateCurrentPower(uint16_t secs) {
     if (secs > 0) {
         for (uint8_t i = 1; i <= pulseInterval.getCount(); i++) {
             sumAvg += pulseInterval.getAvg(i);  // tenth of sec
-            if (sumAvg)
+            if (sumAvg > 0)
                 pulses++;
             if (sumAvg > (secs * 100))
                 break;
@@ -155,6 +177,43 @@ static int16_t calculateCurrentPower(uint16_t secs) {
         return int(3600000 / (settings.turnsPerKwh * (pulseInterval.getAvg(pulses)/10.0)));
     } else {
         return -1;
+    }
+}
+
+
+// since ADC readings seem to increase a little bit, if Wifi was
+// switched off, calculate an offset for the pulseThreshold
+static void setPulseThresholdOffset(bool reset) {
+    static uint32_t wifiOffMillis = 0;
+    static uint32_t wifiOnMillis = 0;
+    static uint16_t noPulseLevelWifiOn = 0;
+
+    if (reset) {
+        wifiOnMillis = 0;
+        wifiOffMillis = 0;
+        ferraris.offsetNoWifi = 0;
+        return;
+    }
+
+    // remember time when Wifi connection was first
+    // available and when it was switched off
+    if (!wifiOnMillis && (wifiStatus == 1))
+        wifiOnMillis = millis();
+    if (!wifiOffMillis && (wifiStatus == 0))
+        wifiOffMillis = millis();
+
+    // determine the average baseline pulse reading within the
+    // last 30 sec. at least 60 sec. after system startup
+    if (!noPulseLevelWifiOn && (wifiOnMillis > 0) && ((millis() - wifiOnMillis) > 60000)) {
+        noPulseLevelWifiOn = findPastAverage(30000/settings.readingsIntervalMs);
+        Serial.printf("Set average ADC no pulse level to %d\n", noPulseLevelWifiOn);
+    }
+
+    // determine the offset for pulse readings if Wifi is off based on
+    // the last 20 sec. at least 30 sec. after Wifi was switched off
+    if (!ferraris.offsetNoWifi && (wifiOffMillis > 0) && ((millis() - wifiOffMillis) > 30000)) {
+        ferraris.offsetNoWifi = findPastAverage(20000/settings.readingsIntervalMs) - noPulseLevelWifiOn;
+        Serial.printf("Set ADC offset for inactive Wifi to %d\n", ferraris.offsetNoWifi);
     }
 }
 
@@ -183,6 +242,7 @@ bool readFerraris() {
     static uint8_t cutDwnCnt = 0;
     static uint8_t aboveThreshold = 0;
     uint16_t pulseReading;
+    int16_t currentPower;
 
     pulseReading = readIRSensor();
     pulseReadings[ferraris.index++] = pulseReading;
@@ -206,15 +266,20 @@ bool readFerraris() {
             ferraris.index = 0;
     }
 
-    // only count revolutions if a valid threshold value has been set, since last
+    // only count a rotation if a valid threshold value has been set, since last
     // count at least pulseDebounceMs seconds have passed, the readings have
     // been above the threshold at least aboveThresholdTrigger consecutive times
     // and a rising edge was identified in recents readings
     if (settings.pulseThreshold > 0 && 
             (tsDiff(previousCountMillis) > settings.pulseDebounceMs) &&
-            pulseReading >= settings.pulseThreshold && 
-            ++aboveThreshold >= settings.aboveThresholdTrigger && 
+            pulseReading >= (settings.pulseThreshold + ferraris.offsetNoWifi) &&
+            ++aboveThreshold >= settings.aboveThresholdTrigger &&
             findRisingEdge()) {
+
+        // if Wifi is off but ADC offset is not yet set,
+        // ignore possibly false pulse counts
+        if (wifiStatus == 0 && !ferraris.offsetNoWifi)
+            return false;
 
         // keep history of recents pulse intervals (saved as tenth of second)
         // for optional moving average, see calculateCurrentPower() below
@@ -229,18 +294,36 @@ bool readFerraris() {
         // (re)calculate total consumption (kwh) and current power consumption (watt)
         ferraris.consumption = (settings.counterTotal / (settings.turnsPerKwh * 1.0))
                 + (settings.counterOffset / 100.0);
-        ferraris.power = calculateCurrentPower(settings.calculatePowerMvgAvg ? settings.powerAvgSecs : 0);
+        currentPower = calculateCurrentPower(0);
+        if (settings.calculatePowerMvgAvg) {
+            ferraris.power = calculateCurrentPower(settings.powerAvgSecs);
+            Serial.printf("Red marker detected (%d rotations), averaged/current power consumption %d/%d W\n",
+                settings.counterTotal, ferraris.power, currentPower);
+        } else {
+            ferraris.power = currentPower;
+            Serial.printf("Red marker detected (%d rotations), current power consumption %d W\n",
+                settings.counterTotal, ferraris.power);
+        }
 
         return true;
     }
 
-    // after a peak in consumption, this helps to bring the reading
-    // for the most recent pulse interval back down more quickly
-    if (pulseInterval.getAvg(1) > 0 &&
+    // after a peak in consumption, this helps to bring
+    // down the current (averaged) power reading more quickly
+    if (settings.calculatePowerMvgAvg && pulseInterval.getAvg(1) > 0 &&
             (tsDiff(previousCountMillis)/100 > (pulseInterval.getAvg(cutDwnCnt+1)*(cutDwnCnt+1)))) {
         pulseInterval.reading(tsDiff(previousCountMillis)/100);
         cutDwnCnt++;
+    } else if (!settings.calculatePowerMvgAvg && ferraris.power > 1000 &&
+            (3600000/(ferraris.power * 75)) < (tsDiff(previousCountMillis)/1000 * 0.5)) {
+        Serial.printf("Red marker not yet detected, lower current power to %d\n", int(ferraris.power * 0.7));
+        ferraris.power = int(ferraris.power * 0.7);
     }
+
+    // since switching off Wifi has an effect on ADC readings a (positiv)
+    // offset has to be calculated and added to pulse threshold value
+    if (settings.enablePowerSavingMode && !ferraris.offsetNoWifi)
+        setPulseThresholdOffset(false);
 
     return false;
 }
@@ -252,4 +335,12 @@ void calibrateFerraris() {
     thresholdCalculation = true;
     settings.pulseThreshold = 0;
     resetReadings();
+}
+
+
+// if system switches from power saving mode back to online
+// mode (Wifi always on) the ADC offset needs to be reset to 0
+void resetWifiOffset() {
+    Serial.println(F("Reset ADC offset"));
+    setPulseThresholdOffset(true);
 }

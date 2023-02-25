@@ -1,5 +1,5 @@
 /***************************************************************************
-  Copyright (c) 2019-2022 Lars Wessels
+  Copyright (c) 2019-2023 Lars Wessels
 
   This file a part of the "ESP8266 Wifi Power Meter" source code.
   https://github.com/lrswss/esp8266-wifi-power-meter
@@ -16,7 +16,7 @@ const char HEADER_html[] PROGMEM = R"=====(
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="author" content="(c) 2019-2022 Lars Wessels">
+<meta name="author" content="(c) 2019-2023 Lars Wessels">
 <meta name="description" content="https://github.com/lrswss/esp8266-wifi-power-meter/">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
 <title>Wifi Stromz&auml;hler __SYSTEMID__</title>
@@ -172,6 +172,7 @@ function getReadings() {
       document.getElementById("TotalConsumption").innerHTML = (json.totalConsumption > 0 ? json.totalConsumption : "--");
       document.getElementById("CurrentPower").innerHTML = (json.currentPower > 0 ? json.currentPower : "--");
       document.getElementById("Runtime").innerHTML = json.runtime;
+      document.getElementById("RSSI").innerHTML = json.rssi;
       document.getElementById("CurrentReadings").innerHTML = json.currentReadings;
       document.getElementById("TotalReadings").innerHTML = json.totalReadings;
       document.getElementById("PulseMin").innerHTML = (json.pulseMin > 0 ? json.pulseMin : "--");
@@ -215,6 +216,7 @@ function getReadings() {
     <tr id="tr4"><th>Minimum/Maximum:</th><td><span id="PulseMin">--</span>/<span id="PulseMax">--</span></td></tr>
 	<tr id="tr5"><th>Impulsschwellwert:</th><td><span id="PulseThreshold">--</span></td></tr>
 	<tr><th>Laufzeit:</th><td><span id="Runtime">--d --h --m</span></td></tr>
+    <tr><th>WLAN RSSI:</th><td><span id="RSSI">--</span> dBm</td></tr>
 </table>
 </div>
 <div id="buttons" style="margin-top:5px">
@@ -297,18 +299,18 @@ function configSaved() {
 <div style="max-width:335px;margin-top:10px;">
 <form method="POST" action="/expert" onsubmit="return confirmRestart();">
   <fieldset><legend><b>&nbsp;Ferraris-Abtastung&nbsp;</b></legend>
-  <p><b>Schwellwert für Zählung (10-1023)</b><br />
-  <input id="input_pulse_threshold" name="pulse_threshold" size="16" maxlength="4" value="__IMPULS_THRESHOLD__" onkeyup="digitsOnly(this);"></p>
-   <p><b>Varianz für Erkennung (3-30)</b><br />
+  <p><b>Schwellwert für Zählung (__PULSE_THRESHOLD_MIN__-__PULSE_THRESHOLD_MAX__)</b><br />
+  <input id="input_pulse_threshold" name="pulse_threshold" size="16" maxlength="4" value="__PULSE_THRESHOLD__" onkeyup="digitsOnly(this);"></p>
+   <p><b>Varianz für Erkennung (__READINGS_SPREAD_MIN__-__READINGS_SPREAD_MAX__)</b><br />
   <input id="input_readings_spread" name="readings_spread" size="16" maxlength="2" value="__READINGS_SPREAD__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Abtastrate IR-Sensor (15-50 ms)</b><br />
-  <input id="input_readings_interval" name="readings_interval" size="16" maxlength="3" value="__READINGS_INTERVAL__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Ringspeicher (30-120 Sek.)</b><br />
-  <input id="input_readings_buffer" name="readings_buffer" size="16" maxlength="3" value="__READINGS_BUFFER__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Pulse für Zählung (3-6)</b><br />
+  <p><b>Abtastrate IR-Sensor (__READINGS_INTERVAL_MS_MIN__-__READINGS_INTERVAL_MS_MAX__)</b><br />
+  <input id="input_readings_interval" name="readings_interval" size="16" maxlength="3" value="__READINGS_INTERVAL_MS__" onkeyup="digitsOnly(this);"></p>
+  <p><b>Ringspeicher (__READINGS_BUFFER_SECS_MIN__-__READINGS_BUFFER_SECS_MAX__ Sek.)</b><br />
+  <input id="input_readings_buffer" name="readings_buffer" size="16" maxlength="3" value="__READINGS_BUFFER_SECS__" onkeyup="digitsOnly(this);"></p>
+  <p><b>Pulse für Zählung (__THRESHOLD_TRIGGER_MIN__-__THRESHOLD_TRIGGER_MAX__)</b><br />
   <input id="input_threshold_tigger" name="threshold_trigger" size="16" maxlength="2" value="__THRESHOLD_TRIGGER__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Totzeit Zählungen (1000-3000 ms)</b><br />
-  <input id="input_debounce_time" name="debounce_time" size="16" maxlength="4" value="__DEBOUNCE_TIME__" onkeyup="digitsOnly(this);"></p>
+  <p><b>Totzeit Zählungen (__DEBOUNCE_TIME_MS_MIN__-__DEBOUNCE_TIME_MS_MAX__ ms)</b><br />
+  <input id="input_debounce_time" name="debounce_time" size="16" maxlength="4" value="__DEBOUNCE_TIME_MS__" onkeyup="digitsOnly(this);"></p>
   </fieldset>
   <br />
 
@@ -470,6 +472,24 @@ function togglePowerAvg() {
   }
 }
 
+function togglePowerSaving(warning) {
+  if (document.getElementById("checkbox_powersaving").checked == true) {
+    if (warning)
+      alert('ACHTUNG: Die Weboberfläche ist nach dem Aktivieren des Energieparmodus '+
+        'nur noch 5 Minuten erreichbar. Danach wird die WLAN-Verbindung abgeschaltet '+
+        'und fortlaufend immer nur für wenige Sekunden zur Datenübermittelung per MQTT aktiviert. '+
+        'Ein Zugriff auf die Weboberfläche ist nur durch einen Neustart des Wifi Power Meter '+
+        'oder das Senden einer MQTT Nachricht (__MQTT_BASE_TOPIC__/__SYSTEMID__/cmd/powersave 0) '+
+        'mit Retain Flag möglich. Für die Momentanleistung wird automatisch der gleitende ' +
+        'Durchschnitt aktiviert.');
+      document.getElementById("checkbox_power_avg").checked = true;
+      document.getElementById("input_power_avg_secs").value = __POWER_AVG_SECS_POWERSAVING__;
+      togglePowerAvg();
+    if (Number(document.getElementById("input_mqttinterval").value) < __MQTT_INTERVAL_MIN_POWERSAVING__)
+        document.getElementById("input_mqttinterval").value = __MQTT_INTERVAL_MIN_POWERSAVING__;
+  }
+}
+
 function toggleJSON() {
   if (document.getElementById("checkbox_mqtt_json").checked == false) {
     document.getElementById("checkbox_mqtt_ha_discovery").checked = false;
@@ -484,14 +504,14 @@ function toggleHADiscovery() {
 
 </script>
 </head>
-<body onload="configSaved(); togglePower(); toggleMQTT(); toggleMQTTAuth(); toggleMQTTSecure(); togglePowerAvg(); toggleJSON(); toggleHADiscovery();">
+<body onload="configSaved(); togglePower(); toggleMQTT(); toggleMQTTAuth(); toggleMQTTSecure(); togglePowerAvg(); togglePowerSaving(false); toggleJSON(); toggleHADiscovery();">
 <div style="text-align:left;display:inline-block;min-width:340px;">
 <div style="text-align:center;">
 <h2 id="heading">Einstellungen</h2>
 <div id="message" style="display:none;margin-top:10px;color:red;font-weight:bold;text-align:center;max-width:335px">
 <span id="configSaved" style="display:none;color:green">Einstellungen gespeichert</span>
 <span id="counterError" style="display:none">Zählerstand prüfen</span>
-<span id="kwhError" style="display:none">KWh/Umdrehung prüfen</span>
+<span id="kwhError" style="display:none">Umdrehung/kWh prüfen</span>
 <span id="mqttError" style="display:none">MQTT-Einstellungen prüfen</span>
 <span id="mqttAuthError" style="display:none">MQTT-Benutzer/Passwort prüfen</span>
 <span id="restartSystem" style="display:none;color:red">System wird neu gestartet...</span>
@@ -501,17 +521,17 @@ function toggleHADiscovery() {
 <div style="max-width:335px;margin-top:10px;">
 <form method="POST" action="/config" onsubmit="return checkInput();">
   <fieldset><legend><b>&nbsp;Ferraris-Zähler&nbsp;</b></legend>
-  <p><b>KWh pro Umdrehung (50-800)</b><br />
+  <p><b>Umdrehungen pro kWh (__KWH_TURNS_MIN__-__KWH_TURNS_MAX__)</b><br />
   <input id="input_kwh_turns" name="kwh_turns" size="16" maxlength="3" value="__TURNS_KWH__" onkeyup="digitsOnly(this);"></p>
-  <p><b>Aktueller Zählerstand (KWh)</b><br />
+  <p><b>Aktueller Zählerstand (kWh)</b><br />
   <input id="input_consumption_kwh" name="consumption_kwh" size="16" maxlength="9" value="__CONSUMPTION_KWH__" onkeyup="floatsOnly(this);"></p>
   <p><b>Zählernummer (optional)</b><br />
   <input id="input_meter_id" name="meter_id" size="16" maxlength="16" value="__METER_ID__" onkeyup="ASCIIOnly(this);"></p>
-  <p><b>Backup Zählerstand (60-180 Min.)</b><br />
+  <p><b>Backup Zählerstand (__BACKUP_CYCLE_MIN__-__BACKUP_CYCLE_MAX__ Min.)</b><br />
   <input id="input_backup_cycle" name="backup_cycle" size="16" maxlength="3" value="__BACKUP_CYCLE__" onkeyup="digitsOnly(this);"></p>
   <p><input id="checkbox_power" name="current_power" onclick="togglePower();" type="checkbox" __CURRENT_POWER__><b>Momentanleistung errechnen</b></p>
   <span id="power"><p><input id="checkbox_power_avg" name="current_power_avg" onclick="togglePowerAvg();" type="checkbox" __POWER_AVG__><b>Gleitender Durchschnitt</b></p>
-  <span id="power_avg"><p><b>Zeitraum (30-300 secs.)</b><br />
+  <span id="power_avg"><p><b>Zeitraum (__POWER_AVG_SECS_MIN__-__POWER_AVG_SECS_MAX__ Sek.)</b><br />
   <input id="input_power_avg_secs" name="power_avg_secs" size="16" maxlength="3" value="__POWER_AVG_SECS__" onkeyup="digitsOnly(this);"></p></span>
   </span>
   </fieldset>
@@ -529,7 +549,8 @@ function toggleHADiscovery() {
   <p><input id="checkbox_mqtt_json" name="mqtt_json" onclick="toggleJSON();"  type="checkbox" __MQTT_JSON__><b>Daten als JSON publizieren</b></p>
   <p><input id="checkbox_mqtt_ha_discovery" name="mqtt_ha_discovery" onclick="toggleHADiscovery();" type="checkbox" __MQTT_HA_DISCOVERY__><b>Home Assistant Discovery</b></p>
   <p><b>Nachrichteninterval (Sek.)</b><br />
-  <input name="mqttinterval" value="__MQTT_INTERVAL__" maxlength="4" onkeyup="digitsOnly(this);"></p>
+  <input id="input_mqttinterval" name="mqttinterval" value="__MQTT_INTERVAL__" maxlength="4" onkeyup="digitsOnly(this);"></p>
+  <p><input id="checkbox_powersaving" name="powersavingmode" type="checkbox" onclick="togglePowerSaving(true);" __POWER_SAVING_MODE__><b>Energiesparmodus</b></p>
   <p><input id="checkbox_mqttauth" name="mqttauth" onclick="toggleMQTTAuth();" type="checkbox" __MQTT_AUTH__><b>Authentifizierung aktivieren</b></p>
      <span style="display:none" id="mqttauth">
      <p><b>Benutzername</b><br />
@@ -544,6 +565,8 @@ function toggleHADiscovery() {
 
   <p><button class="button bred" type="submit">Einstellungen speichern</button></p>
 </form>
+<p><button onclick="location.href='/nvsbackup';">Einstellungen exportieren</button></p>
+<p><button onclick="location.href='/nvsimport';">Einstellungen importieren</button></p>
 <p><button onclick="location.href='/expert';">Experten-Einstellungen</button></p>
 <p><button onclick="location.href='/';">Startseite</button></p>
 </div>
@@ -558,7 +581,7 @@ function initPage() {
     var uploadForm = new FormData();
     var firmwareFile = document.getElementById('firmware_file').files[0];
     if (!firmwareFile) {
-      alert('Bitte zuerst eine Firmware-Datei zum Hochladen auswählen.');
+      alert('Bitte zuerst eine Firmware-Datei *.bin zum Hochladen auswählen.');
       return false;
     }
     uploadForm.append("files", firmwareFile, firmwareFile.name);
@@ -599,8 +622,8 @@ function initPage() {
 <progress id="progress" style="display:none;margin: 17px 0px 6px 50px;width:235px" value="0" max="100"></progress>
 <div id="install" style="display:none;margin-top:10px;text-align:center;color:red"><strong>Installiere Update...</strong></div>
 </div>
-<div style="margin-left:50px;margin-bottom:10px">
-1. Firmware-Datei ausw&auml;hlen<br>
+<div style="margin-left:30px;margin-bottom:10px">
+1. Firmware-Datei *.bin ausw&auml;hlen<br>
 2. Aktualisierung starten<br>
 3. Upload dauert ca. 20 Sek.<br>
 4. System neu starten
@@ -676,13 +699,120 @@ const char UPDATE_ERR_html[] PROGMEM = R"=====(
 )=====";
 
 
+const char IMPORT_html[] PROGMEM = R"=====(
+<script>
+function initPage() {
+  document.getElementById('upload_form').onsubmit = function(e) {
+    e.preventDefault();
+    var uploadForm = new FormData();
+    var configFile = document.getElementById('json_file').files[0];
+    if (!configFile) {
+      alert('Bitte zuerst eine Einstellungsdatei (JSON) zum Hochladen auswählen.');
+      return false;
+    }
+    uploadForm.append("files", configFile, configFile.name);
+    var xhttp = new XMLHttpRequest();
+    xhttp.upload.addEventListener("progress", function(e) {
+      if (e.lengthComputable) {
+        var percent = Math.round((e.loaded/e.total)*100);
+        var progress = document.getElementById('progress');
+        if (percent == 100) {
+            progress.value = percent;
+            progress.style.display = "none";
+            document.getElementById('install').style.display = "block";
+        } else {
+            progress.style.display = "block";
+            progress.value = percent;
+        }
+      }
+    }, false);
+    xhttp.open("POST", "/nvsimport", true);
+    xhttp.onload = function() {
+      if (xhttp.status == 200) {
+        location.href='/nvsimport?res=ok';
+        return true;
+      } else {
+        location.href='/nvsimport?res=err';
+        return false;
+      }
+    };
+    xhttp.send(uploadForm);
+  }
+}
+</script>
+</head>
+<body onload="initPage();">
+<div style="text-align:left;display:inline-block;min-width:340px;">
+<div style="text-align:center;">
+<h2>Einstellungen importieren</h2>
+<progress id="progress" style="display:none;margin: 17px 0px 6px 50px;width:235px" value="0" max="100"></progress>
+<div id="install" style="display:none;margin-top:10px;text-align:center;color:red"><strong>Installiere Update...</strong></div>
+</div>
+<div style="margin-left:40px;margin-bottom:10px">
+1. Konfigurationsdatei ausw&auml;hlen<br />
+2. Import der Datei starten<br />
+3. System neu starten
+</div>
+<div>
+<form method="POST" action="#" enctype="multipart/form-data" id="upload_form">
+  <input id="json_file" type="file" accept=".json" name="update">
+  <p><button class="button bred" type="submit">Einstellungen hochladen</button></p>
+</form>
+<p><button onclick="location.href='/';">Startseite</button></p>
+</div>
+)=====";
+
+
+const char IMPORT_OK_html[] PROGMEM = R"=====(
+<script>
+function restartSystem() {
+  if (confirm("System neu starten?")) {
+    var xhttp = new XMLHttpRequest();
+    setTimeout(function(){location.href='/';}, 15000);
+    document.getElementById("message").style.display = "block";
+    document.getElementById("restartSystem").style.display = "block";
+    xhttp.open("GET", "restart", true);
+    xhttp.send();
+  }
+}
+</script>
+</head>
+<body>
+<div style="text-align:left;display:inline-block;min-width:340px;">
+<div style="text-align:center;">
+<h2 id="heading">Einstellung importieren<br />erfolgreich</h2>
+<div id="message" style="display:none;margin-top:10px;color:red;font-weight:bold;text-align:center;max-width:335px">
+<span id="restartSystem" style="display:none">System wird neu gestartet...<br></span>
+</div>
+</div>
+<div>
+<p><button class="button bred" onclick="restartSystem();">System neu starten</button></p>
+<p><button onclick="location.href='/';">Startseite</button></p>
+</div>
+)=====";
+
+
+const char IMPORT_ERR_html[] PROGMEM = R"=====(
+</head>
+<body>
+<div style="text-align:left;display:inline-block;min-width:340px;">
+<div style="text-align:center;">
+<h2>Einstellungen importieren<br />fehlgeschlagen</h2>
+</div>
+<div>
+<p><button onclick="location.href='/nvsimport';">Import wiederholen</button></p>
+<p><button onclick="location.href='/';">Startseite</button></p>
+</div>
+)=====";
+
+
 const char FOOTER_html[] PROGMEM = R"=====(
 <div class="footer"><hr/>
 <p style="float:left;margin-top:-2px">
 	<a href="https://github.com/lrswss/esp8266-wifi-power-meter" title="build on __BUILD__">Firmware __FIRMWARE__
 </p>
 <p style="float:right;margin-top:-2px">
-	<a href="mailto:software@bytebox.org">&copy; 2019-2022 Lars Wessels</a>
+	<a href="mailto:software@bytebox.org">&copy; 2019-2023 Lars Wessels</a>
 </p>
 <div style="clear:both;"></div>
 </div>

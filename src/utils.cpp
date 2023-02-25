@@ -1,5 +1,5 @@
 /***************************************************************************
-  Copyright (c) 2019-2022 Lars Wessels
+  Copyright (c) 2019-2023 Lars Wessels
 
   This file a part of the "ESP8266 Wifi Power Meter" source code.
   https://github.com/lrswss/esp8266-wifi-power-meter
@@ -14,6 +14,8 @@
 #include "utils.h"
 #include "wlan.h"
 #include "nvs.h"
+#include "mqtt.h"
+
 
 // rollover safe comparison for given timestamp with millis()
 int32_t tsDiff(uint32_t tsMillis) {
@@ -28,7 +30,8 @@ int32_t tsDiff(uint32_t tsMillis) {
 // returns total runtime (day/hours/minutes) as a string
 // has internal time keeping to cope with millis() rollover after 49 days
 // should be called from time to time to update interal counter
-char* getRuntime(bool noSpaces) {
+// if minutesOnly is set return local runtime in minutes (for display in HA)
+char* getRuntime(bool minutesOnly) {
     static uint32_t lastMillis = 0;
     static uint32_t seconds = 0;
     static char runtime[16];
@@ -36,12 +39,12 @@ char* getRuntime(bool noSpaces) {
     seconds += tsDiff(lastMillis) / 1000;
     lastMillis = millis();
 
-    uint16_t days = seconds / 86400 ;
-    uint8_t hours = (seconds % 86400) / 3600;
-    uint8_t minutes = ((seconds % 86400) % 3600) / 60;
-    if (noSpaces) {
-        sprintf(runtime, "%dd%dh%dm", days, hours, minutes);
+    if (minutesOnly) {
+        sprintf(runtime, "%d", seconds/60);
     } else {
+        uint16_t days = seconds / 86400 ;
+        uint8_t hours = (seconds % 86400) / 3600;
+        uint8_t minutes = ((seconds % 86400) % 3600) / 60;
         sprintf(runtime, "%dd %dh %dm", days, hours, minutes);
     }
 
@@ -49,15 +52,12 @@ char* getRuntime(bool noSpaces) {
 }
 
 
-// returns hardware system id (last 3 bytes of mac address)
+// returns hardware system id (ESP's chip id)
 // or value set in web ui as 'power meter id'
 // used for MQTT topic
 String systemID() {
-    uint8_t mac[6];
-
     if (strlen(settings.systemID) < 1) {
-        WiFi.macAddress(mac);
-        sprintf(settings.systemID, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+        snprintf(settings.systemID, sizeof(settings.systemID)-1, "%06X",ESP.getChipId());
     }
     return String(settings.systemID);
 }
@@ -65,8 +65,9 @@ String systemID() {
 
 // save current counter value to eeprom and restart ESP
 void restartSystem() {
+    mqttDisconnect(true);
+    saveNVS(false);
     Serial.println(F("Restart..."));
-    saveNVS();
     delay(1000);
     ESP.restart();
 }

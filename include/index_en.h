@@ -104,6 +104,7 @@ function hideMessages() {
   document.getElementById("thresholdSaved").style.display = "none";
   document.getElementById("thresholdFound").style.display = "none";
   document.getElementById("thresholdFailed").style.display = "none";
+  document.getElementById("mqttConnFailed").style.display = "none";
   document.getElementById("publishFailed").style.display = "none";
   document.getElementById("restartSystem").style.display = "none";
   document.getElementById("publishData").style.display = "none";
@@ -201,6 +202,7 @@ function getReadings() {
 <span id="thresholdReset" style="display:none;color:green">Counter reset successful</span>
 <span id="thresholdSaved" style="display:none;color:green">Pulse threshold set successfully</span>
 <span id="thresholdFailed" style="display:none">Readings not sufficient</span>
+<span id="mqttConnFailed" style="display:none">MQTT connection failed</span>
 <span id="publishFailed" style="display:none">Failed to publish data via MQTT</span>
 <span id="restartSystem" style="display:none">System will restart shortly...</span>
 <span id="publishData" style="display:none;color:green">Published data via MQTT</span>

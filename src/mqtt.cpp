@@ -298,13 +298,14 @@ static void subCmdTopics() {
 
 
 // connect to MQTT server (with changing id on every attempt)
-// give up after three consecutive failures
+// give up after three consecutive connection failures and
+// retry after MQTT_CONN_RETRY_SECS seconds
 static bool mqttConnect() {
     static char clientid[32];
     static uint32 mqttErrorMillis = 0;
     uint8_t mqttError = 0;
 
-    if (mqttErrorMillis > 0 && tsDiff(mqttErrorMillis) > 3000)
+    if (mqttErrorMillis > 0 && tsDiff(mqttErrorMillis) < (MQTT_CONN_RETRY_SECS * 1000))
         return false;
 
     if (!WiFi.isConnected()) {
@@ -348,7 +349,8 @@ static bool mqttConnect() {
     }
 
     if (mqttError >= 3) {
-        setMessage("publishFailed", 3);
+        setMessage("mqttConnFailed", 3);
+        Serial.printf("Retry MQTT connection in %d seconds...\n", MQTT_CONN_RETRY_SECS);
         mqttErrorMillis = millis();
         mqttError = 0;
         return false;
@@ -377,15 +379,17 @@ void mqttUnsetTopic(const char* topic) {
 // publish data on multiple topics
 static void publishDataSingle() {
     static char topicStr[128];
+    uint8_t mqttError = 0;
 
     if (mqttConnect()) {
-        setMessage("publishData", 3);
         snprintf(topicStr, sizeof(topicStr), "%s/%s/state/%s",
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_CNT);
         if (mqtt->publish(topicStr, String(settings.counterTotal).c_str(), false))
             Serial.printf("MQTT %s %d\n", topicStr, settings.counterTotal);
-        else
+        else {
             Serial.printf("MQTT %s failed!\n", topicStr);
+            mqttError++;
+        }
         delay(50);
 
         // need counter offset to publish total consumption (kwh)
@@ -397,6 +401,7 @@ static void publishDataSingle() {
                 Serial.println(ferraris.consumption, 2); // float!
             } else {
                 Serial.printf("MQTT %s failed!\n", topicStr);
+                mqttError++;
             }
             delay(50);
         }
@@ -406,8 +411,10 @@ static void publishDataSingle() {
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_PWR);
             if (mqtt->publish(topicStr, String(ferraris.power).c_str(), false))
                 Serial.printf("MQTT %s %d\n", topicStr, ferraris.power);
-            else
+            else {
                 Serial.printf("MQTT %s failed!\n", topicStr);
+                mqttError++;
+            }
             delay(50);
         }
 
@@ -415,32 +422,40 @@ static void publishDataSingle() {
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_TXINT);
         if (mqtt->publish(topicStr, String(settings.mqttIntervalSecs).c_str(), false))
             Serial.printf("MQTT %s %d\n", topicStr, settings.mqttIntervalSecs);
-        else
+        else {
             Serial.printf("MQTT %s failed!\n", topicStr);
+            mqttError++;
+        }
         delay(50);
 
         snprintf(topicStr, sizeof(topicStr), "%s/%s/state/%s",
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_RUNT);
         if (mqtt->publish(topicStr, getRuntime(true), true))
             Serial.printf("MQTT %s %s\n", topicStr, getRuntime(true));
-        else
+        else {
             Serial.printf("MQTT %s failed!\n", topicStr);
+            mqttError++;
+        }
         delay(50);
 
         snprintf(topicStr, sizeof(topicStr), "%s/%s/state/%s",
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_RSSI);
         if (mqtt->publish(topicStr, String(WiFi.RSSI()).c_str(), false))
             Serial.printf("MQTT %s %d\n", topicStr, WiFi.RSSI());
-        else
+        else {
             Serial.printf("MQTT %s failed!\n", topicStr);
+            mqttError++;
+        }
         delay(50);
 
         snprintf(topicStr, sizeof(topicStr), "%s/%s/state/%s",
             settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_PSAVE);
         if (mqtt->publish(topicStr, String(settings.enablePowerSavingMode ? 1 : 0).c_str(), false))
             Serial.printf("MQTT %s %d\n", topicStr, settings.enablePowerSavingMode ? 1 : 0);
-        else
+        else {
             Serial.printf("MQTT %s failed!\n", topicStr);
+            mqttError++;
+        }
         delay(50);
 
         if (settings.enablePowerSavingMode) {
@@ -448,16 +463,20 @@ static void publishDataSingle() {
                 settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_ONAIR);
             if (mqtt->publish(topicStr, String(wifiOnlineTenthSecs/10).c_str(), false))
                 Serial.printf("MQTT %s %d\n", topicStr, wifiOnlineTenthSecs/10);
-            else
+            else {
                 Serial.printf("MQTT %s failed!\n", topicStr);
+                mqttError++;
+            }
             delay(50);
         } else {
             snprintf(topicStr, sizeof(topicStr), "%s/%s/state/%s",
                 settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_WIFI);
             if (mqtt->publish(topicStr, String(wifiReconnectCounter).c_str(), false))
                 Serial.printf("MQTT %s %d\n", topicStr, wifiReconnectCounter);
-            else
+            else {
                 Serial.printf("MQTT %s failed!\n", topicStr);
+                mqttError++;
+            }
             delay(50);
         }
 
@@ -465,8 +484,10 @@ static void publishDataSingle() {
             settings.mqttBaseTopic, systemID().c_str());
         if (mqtt->publish(topicStr, String(FIRMWARE_VERSION).c_str(), false))
             Serial.printf("MQTT %s %d\n", topicStr, FIRMWARE_VERSION);
-        else
+        else {
             Serial.printf("MQTT %s failed!\n", topicStr);
+            mqttError++;
+        }
         delay(50);
 
 #ifdef DEBUG_HEAP
@@ -474,10 +495,16 @@ static void publishDataSingle() {
             settings.mqttBroker, systemID().c_str(), MQTT_SUBTOPIC_HEAP);
         if (mqtt->publish(topicStr, String(ESP.getFreeHeap()).c_str(), false))
             Serial.printf("%s %d\n", topicStr, ESP.getFreeHeap());
-        else
+        else {
             Serial.printf("MQTT %s failed!\n", topicStr);
+            mqttError++;
+        }
 #endif
     }
+    if (!mqttError)
+        setMessage("publishData", 3);
+    else
+        setMessage("publishFailed", 3);
 }
 
 
@@ -488,7 +515,6 @@ static void publishDataJSON() {
 
     JSON.clear();
     if (mqttConnect()) {
-        setMessage("publishData", 3);
         JSON[MQTT_SUBTOPIC_CNT] = settings.counterTotal;
         if (ferraris.consumption > 0)
             JSON[MQTT_SUBTOPIC_CONS] =  int(ferraris.consumption * 100) / 100.0;
@@ -510,7 +536,10 @@ static void publishDataJSON() {
 #endif
         snprintf(topicStr, sizeof(topicStr), "%s/%s/state",
             settings.mqttBaseTopic, systemID().c_str());
-        publishJSON(JSON, topicStr, false, true);
+        if (publishJSON(JSON, topicStr, false, true))
+            setMessage("publishData", 3);
+        else
+            setMessage("publishFailed", 3);
     }
 }
 

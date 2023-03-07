@@ -117,6 +117,7 @@ void loop() {
 
     if (wifiStatus == 1) {
         handleWebrequest();
-        mqttLoop();
+        if (settings.enableMQTT)
+            mqttLoop();
     }
 }

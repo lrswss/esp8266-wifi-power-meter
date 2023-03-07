@@ -46,9 +46,13 @@
 // minimum mqtt message interval (secs) if power saving mode is enabled
 // wifi is switched off at least for given number of seconds
 #define MQTT_INTERVAL_MIN_POWERSAVING 180
+
 // power saving mode enables moving average for current power reading
 // to return reasonable values
 #define POWER_AVG_SECS_POWERSAVING 90
+
+// retry connecting to MQTT broker after given number of seconds
+#define MQTT_CONN_RETRY_SECS 15
 
 void mqttPublish();
 void mqttDisconnect(bool unsetHAdiscovery);

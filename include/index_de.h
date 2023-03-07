@@ -104,6 +104,7 @@ function hideMessages() {
   document.getElementById("thresholdSaved").style.display = "none";
   document.getElementById("thresholdFound").style.display = "none";
   document.getElementById("thresholdFailed").style.display = "none";
+  document.getElementById("mqttConnFailed").style.display = "none";
   document.getElementById("publishFailed").style.display = "none";
   document.getElementById("restartSystem").style.display = "none";
   document.getElementById("publishData").style.display = "none";
@@ -201,6 +202,7 @@ function getReadings() {
 <span id="thresholdReset" style="display:none;color:green">Zähler zurückgesetzt</span>
 <span id="thresholdSaved" style="display:none;color:green">Schwellwert gespeichert</span>
 <span id="thresholdFailed" style="display:none">Messwerte nicht ausreichend</span>
+<span id="mqttConnFailed" style="display:none">MQTT-Verbindung fehlgeschlagen</span>
 <span id="publishFailed" style="display:none">Publizieren über MQTT fehlgeschlagen</span>
 <span id="restartSystem" style="display:none">System wird neu gestartet...</span>
 <span id="publishData" style="display:none;color:green">Daten über MQTT publiziert</span>

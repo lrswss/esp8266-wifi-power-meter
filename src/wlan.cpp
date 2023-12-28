@@ -87,9 +87,12 @@ void reconnectWifi() {
     if ((millis() - lastReconnect) > 30000) {
         lastReconnect = millis();
 
-        // count and publish Wifi reconnect tries
-        // to help identify an unstable uplink
-        wifiReconnectCounter++;
+        // count and publish Wifi reconnects unless in power saving mode
+        // could help identify an unstable uplink
+        if (!settings.enablePowerSavingMode)
+            wifiReconnectCounter++;
+        else
+            wifiReconnectCounter = 0;
 
         Serial.printf("Trying to reconnect to SSID %s...", WiFi.SSID().c_str());
         if (WiFi.reconnect()) {

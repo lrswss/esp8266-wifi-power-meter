@@ -55,7 +55,7 @@ static bool publishJSON(JsonDocument& json, char *topic, bool retain, bool verbo
 static void addDeviceDescription(JsonDocument& json) {
     JsonObject dev = json.createNestedObject("dev");
     dev["name"] = "WiFi Power Meter " + String(settings.systemID);
-    dev["ids"] = settings.systemID;
+    dev["ids"].add(String(settings.systemID));
     dev["cu"] = "http://" + WiFi.localIP().toString();
     dev["mdl"] = "ESP8266";
     dev["mf"] = "https://github.com/lrswss";
@@ -108,7 +108,7 @@ static void publishHADiscoveryMessage(bool publish) {
     if (publish) {
         Serial.printf("Sending Home Assistant MQTT discovery message for %s...\n", devTopic);
 
-        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Ferraris Impuls Counter";
+        JSON["name"] = "Ferraris Impuls Counter";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-impuls-counter";
         JSON["ic"] = "mdi:rotate-360";
         JSON["stat_t"] = devTopic;
@@ -116,7 +116,7 @@ static void publishHADiscoveryMessage(bool publish) {
         addDeviceDescription(JSON);
         publishJSON(JSON, topicCount, true, false);
 
-        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Total Consumption";
+        JSON["name"] = "Total Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-total-consumption";
         JSON["ic"] = "mdi:counter";
         JSON["unit_of_meas"] = "kWh";
@@ -127,7 +127,7 @@ static void publishHADiscoveryMessage(bool publish) {
         addDeviceDescription(JSON);
         publishJSON(JSON, topicTotalCon, true, false);
 
-        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Current Power Consumption";
+        JSON["name"] = "Current Power Consumption";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-current-power";
         JSON["ic"] = "mdi:lightning-bolt";
         JSON["unit_of_meas"] = "W";
@@ -138,7 +138,7 @@ static void publishHADiscoveryMessage(bool publish) {
         addDeviceDescription(JSON);
         publishJSON(JSON, topicPower, true, false);
 
-        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " WiFi Signal Strength";
+        JSON["name"] = "WiFi Signal Strength";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-rssi";
         JSON["unit_of_meas"] = "dBm";
         JSON["dev_cla"] = "signal_strength";
@@ -148,7 +148,7 @@ static void publishHADiscoveryMessage(bool publish) {
         publishJSON(JSON, topicRSSI, true, false);
 
         if (settings.enablePowerSavingMode) {
-            JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " WiFi Power Saving Uptime";
+            JSON["name"] = "WiFi Power Saving Uptime";
             JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-wifi-powersaving-uptime";
             JSON["unit_of_meas"] = "s"; // seconds
             JSON["ic"] = "mdi:wifi-arrow-up-down";
@@ -157,19 +157,21 @@ static void publishHADiscoveryMessage(bool publish) {
             JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_ONAIR) +" }}";
             addDeviceDescription(JSON);
             publishJSON(JSON, topicWifiOnAir, true, false);
+            mqtt->publish(topicWifiCnt, "", true); // remove WiFi reconnect counter topic
         } else {
-            JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " WiFi Reconnect Counter";
+            JSON["name"] = "WiFi Reconnect Counter";
             JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-wifi-reconnect-counter";
             JSON["ic"] = "mdi:wifi-alert";
             JSON["stat_t"] = devTopic;
             JSON["val_tpl"] = "{{ value_json."+ String(MQTT_SUBTOPIC_WIFI) +" }}";
             addDeviceDescription(JSON);
             publishJSON(JSON, topicWifiCnt, true, false);
+            mqtt->publish(topicWifiOnAir, "", true); // remove WiFi total connection time topic
         }
 
-        JSON["name"] = "WiFi Power Meter " + String(settings.systemID) + " Uptime";
+        JSON["name"] = "Uptime";
         JSON["unique_id"] = "wifipowermeter-" + String(settings.systemID)+ "-uptime";
-        JSON["unit_of_meas"] = "m"; // minutes
+        JSON["unit_of_meas"] = "min"; // minutes
         JSON["ic"] = "mdi:clock-outline";
         JSON["dev_cla"] = "duration";
         JSON["stat_t"] = devTopic;
@@ -458,6 +460,8 @@ static void publishDataSingle() {
         }
         delay(50);
 
+        // in power saving mode publish total number of seconds connected to WiFi
+        // if continuously conntected to WiFi publish number of WiFi reconnects
         if (settings.enablePowerSavingMode) {
             snprintf(topicStr, sizeof(topicStr), "%s/%s/state/%s",
                 settings.mqttBaseTopic, systemID().c_str(), MQTT_SUBTOPIC_ONAIR);
@@ -522,6 +526,9 @@ static void publishDataJSON() {
             JSON[MQTT_SUBTOPIC_PWR] = ferraris.power;
         JSON[MQTT_SUBTOPIC_TXINT] = settings.mqttIntervalSecs;
         JSON[MQTT_SUBTOPIC_RUNT] = atoi(getRuntime(true));
+
+        // in power saving mode publish total number of seconds connected to WiFi
+        // if continuously conntected to WiFi publish number of WiFi reconnects
         if (!settings.enablePowerSavingMode) {
             JSON[MQTT_SUBTOPIC_PSAVE] = 0;
             JSON[MQTT_SUBTOPIC_WIFI] = wifiReconnectCounter;
@@ -529,6 +536,7 @@ static void publishDataJSON() {
             JSON[MQTT_SUBTOPIC_PSAVE] = 1;
             JSON[MQTT_SUBTOPIC_ONAIR] = wifiOnlineTenthSecs/10;
         }
+
         JSON[MQTT_SUBTOPIC_RSSI] = WiFi.RSSI();
         JSON["version"] = FIRMWARE_VERSION;
 #ifdef DEBUG_HEAP
